@@ -1,0 +1,26 @@
+name,dob,relation,email,mobile,partner_name,note,city,,,CSV template (fill outside the app)
+Ada Gomnaes,5/12/90,ourHousehold,ada@example.com,+47 900 00 000,Ola Gomnaes,,Oslo,,,File in the repo: TheGomsons/FamilyTreeImportTemplate.csv — same columns as the in-app sample.
+Ola Gomnaes,3/1/88,ourHousehold,ola@example.com,+47 900 00 001,Ada Gomnaes,,Oslo,,,"Columns (header row): name, dob, relation, email, mobile, partner_name, note, city"
+Ingrid Berg,11/20/60,myParentsLine,,+47 400 00 000,,Mother,Bergen,,,"Extra column names are accepted (e.g. phone instead of mobile, notes instead of note); the importer maps them by header."
+Hans Gomnæs,,spouseParentsline,,,,,Hønefoss,,,"dob: e.g. 1990-05-12, or dd.MM.yyyy / dd/MM/yyyy."
+Elsa Gomnæs,,extended,,,,,Hønefoss,,,relation: either a branch keyword or free text:
+Morten Gomnæs,,,,,,,Hønefoss,,,"Branch: ourHousehold, myParentsLine, spouseParentsLine, extended (common aliases work, e.g. household, my parents, in-laws)."
+Anne Gomnæs,,,,,Stian,,Hønefoss,,,Anything else is stored as a relationship label (e.g. “Aunt”) and the branch defaults to Extended (same as the editor’s “Relationship label” field).
+Anton Gomnæs,,,,,,,,,,partner_name: must match another person’s name in the same file (or already in the app). Use each name only once in the file; duplicates are skipped with a warning.
+Mona Gomnæs,,,,,,,,,,In the app (Family tree)
+Ståle Gomnæs,,,,,,,,,,_ menu (next to +): Import CSV… (UTF-8) and Family tree CSV template (share/save the sample file).
+Bjørn Gomnæs,,,,,,,,,,"After import, an alert shows how many people were added, how many partner links were set, and any warnings."
+Sidsel Grimsgaard,,,,,,,,,,Data model
+Jan Grimsgaard,,,,+4790861735,,,,,,"FamilyPerson now has email, mobile, city, and familyRelationLabel, all editable under Contact and Tree layout in the person editor. Search also matches these fields."
+Per Grimsgaard,,,,+4748854808,,,Arendal,,,"Build succeeds. If you use CloudKit for FamilyPerson, deploy a schema update when you ship so the new string fields sync in Production."
+Liv Grimsgaard,,,,,,,Kil,,,
+Gunnar Grimsgaard,,,,+47987654321,,,Mjøndalen,,,
+Erik Grimsgaard,,,,,,,Asker,,,
+Ingeborg Romnes,,,,,,,,,,
+Marit Kristiansen,,,,,,,,,,
+Anne Margrethe Kristiansen,,,,,,,,,,
+Thale Kristiansen,,,,,,,,,,
+Finn Gomnæs,,,,,,,,,,
+Jorunn Romnes Gomnæs,,,,,,,,,,
+Christian Gomnæs,,,,,,,,,,
+Trude Gomnæs,,,,,,,,,,

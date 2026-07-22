@@ -2,14 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CloudKitUsesProductionEnvironment</key>
+	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a picture of an item so the app can suggest a name, category, and any visible prices using on-device analysis.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Choose a photo of an item to analyze on your device and suggest inventory details.</string>
+	<string>Choose a photo of an item to analyze on your device and suggest Belongings details, or pick a family photo for the tree.</string>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
-		<string>processing</string>
 	</array>
 </dict>
 </plist>

@@ -12,8 +12,8 @@ enum HolidayGeocodingError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .emptyQuery: "Enter a place name to look up."
-        case .noResults: "No location found. Try a different spelling or enter latitude and longitude."
+        case .emptyQuery: String(localized: "geocode.empty")
+        case .noResults: String(localized: "geocode.no_results")
         }
     }
 }

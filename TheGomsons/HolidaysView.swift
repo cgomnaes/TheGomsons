@@ -6,67 +6,108 @@
 import SwiftData
 import SwiftUI
 
-/// Holiday hub: plan & vote, past trips, and world map.
+/// Holiday hub: proposals (ideas + chat), upcoming planned trips, past trips, and world map.
 struct HolidaysView: View {
     @Environment(\.openFamilyLanding) private var openFamilyLanding
 
-    private enum HubSection: String, CaseIterable, Identifiable {
-        case planNext = "Plan Next"
-        case pastTrips = "Past Trips"
-        case worldMap = "World Map"
+    private enum HubSection: Int, CaseIterable, Identifiable {
+        case upcoming
+        case proposals
+        case pastTrips
+        case worldMap
 
-        var id: String { rawValue }
+        var id: Int { rawValue }
+
+        var title: String {
+            switch self {
+            case .upcoming: String(localized: "holidays.hub.upcoming")
+            case .proposals: String(localized: "holidays.hub.ideas")
+            case .pastTrips: String(localized: "holidays.hub.past")
+            case .worldMap: String(localized: "holidays.hub.map")
+            }
+        }
     }
 
-    @State private var section: HubSection = .planNext
+    @State private var section: HubSection = .upcoming
     @State private var showNewTrip = false
+    @State private var showTripItImport = false
+    @State private var newTripDefaultsToFuture = true
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Section", selection: $section) {
+                Picker(String(localized: "common.section"), selection: $section) {
                     ForEach(HubSection.allCases) { tab in
-                        Text(tab.rawValue).tag(tab)
+                        Text(tab.title).tag(tab)
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .tint(SimpsonsTheme.blue)
 
                 Group {
                     switch section {
-                    case .planNext:
+                    case .upcoming:
+                        HolidayTripsListContent(filter: .upcoming)
+                    case .proposals:
                         HolidayPlanningView()
                     case .pastTrips:
-                        HolidaysPastTripsContent()
+                        HolidayTripsListContent(filter: .past)
                     case .worldMap:
                         HolidayWorldMapView()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .background(section == .pastTrips ? Color.clear : Color(.systemGroupedBackground))
-            .navigationTitle("Holiday Hub")
+            .background(section == .pastTrips || section == .upcoming ? Color.clear : Color(.systemGroupedBackground))
+            .navigationTitle(String(localized: "holidays.hub.title"))
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     homeButton { openFamilyLanding() }
                 }
-                if section == .pastTrips {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            showNewTrip = true
-                        } label: {
-                            Image(systemName: "suitcase.cart.fill")
-                                .symbolRenderingMode(.multicolor)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        if section == .upcoming || section == .pastTrips {
+                            Button {
+                                newTripDefaultsToFuture = (section == .upcoming)
+                                showNewTrip = true
+                            } label: {
+                                Label(
+                                    section == .upcoming
+                                        ? String(localized: "holidays.new_upcoming")
+                                        : String(localized: "holidays.log_past"),
+                                    systemImage: "suitcase.cart.fill"
+                                )
+                            }
+                        } else {
+                            Button {
+                                section = .upcoming
+                                newTripDefaultsToFuture = true
+                                showNewTrip = true
+                            } label: {
+                                Label(String(localized: "holidays.new_upcoming"), systemImage: "suitcase.cart.fill")
+                            }
                         }
-                        .accessibilityLabel("New trip")
+                        Button {
+                            showTripItImport = true
+                        } label: {
+                            Label(String(localized: "holidays.import_tripit"), systemImage: "square.and.arrow.down.on.square")
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
                     }
+                    .accessibilityLabel(String(localized: "holidays.add_or_import_a11y"))
                 }
             }
             .sheet(isPresented: $showNewTrip) {
-                AddHolidayTripSheet()
+                AddHolidayTripSheet(defaultsToFuture: newTripDefaultsToFuture)
+                    .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showTripItImport) {
+                TripItImportView()
+                    .presentationDetents([.large])
             }
         }
     }

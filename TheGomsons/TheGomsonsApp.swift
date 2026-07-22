@@ -5,15 +5,77 @@
 //  Created by Christian Gomnaes on 29/03/2026.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct TheGomsonsApp: App {
+    @UIApplicationDelegateAdaptor(GomsonsAppDelegate.self) var appDelegate
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TheGomsonsRootView()
         }
-        .modelContainer(CloudDataManager.shared.modelContainer)
+        .environmentObject(CloudDataManager.shared)
+    }
+}
+
+/// Waits for the CloudKit-backed store to load before attaching SwiftData; see `CloudDataManager`.
+private struct TheGomsonsRootView: View {
+    @EnvironmentObject private var cloud: CloudDataManager
+
+    var body: some View {
+        Group {
+            if let container = cloud.modelContainer {
+                // Do **not** `.id(swiftDataStoreEpoch)` here — that remounted ContentView on every
+                // CloudKit import and kicked users back to the landing screen.
+                ContentView()
+                    .modelContainer(container)
+            } else {
+                ProgressView(String(localized: "common.loading"))
+            }
+        }
+    }
+}
+
+/// Registers for remote notifications so `NSPersistentCloudKitContainer` can
+/// receive silent pushes whenever records change in the **Public Database**.
+final class GomsonsAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        application.registerForRemoteNotifications()
+        Task {
+            await FamilyCalendarNotifications.requestAuthorizationIfNeeded()
+        }
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        Task { @MainActor in
+            CloudDataManager.shared.handleRemoteNotification(
+                userInfo: userInfo,
+                completion: completionHandler
+            )
+        }
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        // Token handled by the system for CloudKit subscriptions.
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        print("[TheGomsons] Remote notification registration failed: \(error.localizedDescription)")
     }
 }

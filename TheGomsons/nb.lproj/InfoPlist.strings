@@ -1,0 +1,3 @@
+/* Permission strings (Norwegian Bokmål) */
+"NSCameraUsageDescription" = "Ta bilde av en gjenstand slik at appen kan foreslå navn, kategori og synlige priser med analyse på enheten.";
+"NSPhotoLibraryUsageDescription" = "Velg bilde av en gjenstand for analyse på enheten, eller et familiefoto til slektstreet.";

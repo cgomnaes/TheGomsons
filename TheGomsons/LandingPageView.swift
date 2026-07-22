@@ -10,7 +10,7 @@ struct LandingPageView: View {
     @ObservedObject var ackStore: LandingAckStore
     var onSelectSection: (AppRootTab) -> Void
 
-    /// Springfield-flavored one-liners for the subtitle (original + nod-to-classic tone).
+    /// Springfield-flavored one-liners for the subtitle — always American English (not localized).
     private static let landingQuotes: [String] = [
         "D'oh! — tap a tile before I mess this up.",
         "Mmm… family data.",
@@ -19,39 +19,64 @@ struct LandingPageView: View {
         "Everything's coming up Gomsons!",
         "Excellent. *tents fingers*",
         "What are we doing today? Besides being awesome.",
-        "Okily dokily — choose a tab, neighborino!",
-        "Hi-diddly-ho! The hub awaits.",
+        "Okily dokily — choose a section, neighborino!",
+        "Hi-diddly-ho! The family tree awaits.",
         "Why you little— …shortcut to joy? Tap below.",
         "I am so smart! S-M-A-R-T. (Tap to prove it.)",
         "Marge, I'm confused! Oh — it's just the app. Got it.",
         "Purple is a fruit. These tiles are still useful.",
         "The Internet? On my phone? What a time to be alive!",
-        "Dental plan! …Inventory needs labels. Same energy.",
+        "Dental plan! …Belongings need labels. Same energy.",
         "I choo-choo-choose… a well-organized household.",
-        "Smarch weather? Check the Hub calendar.",
+        "Smarch weather? Check the Calendar.",
         "More fun than a monorail pitch — pick Holidays!",
         "To organized homes — the cause of, and solution to, family peace.",
-        "Kids, you tried your best. The lesson is: tap Dashboard.",
+        "Kids, you tried your best. The lesson is: tap Family tree.",
         "Stupid sexy spreadsheet vibes — open Properties.",
-        "This log cabin of apps has five doors. Pick one!",
+        "This log cabin of apps has six rooms. Pick one!",
         "CloudKit: like a donut hole — empty until you share.",
         "Woo-hoo! Random quote achieved!",
         "Mmm… encrypted sprinkles. (iCloud, basically.)",
         "Let's go, team Gomson!",
-        "Not a prank call — just your family hub.",
-        "Release the hounds! …or gently open Inventory.",
+        "Not a prank call — just your family app.",
+        "Release the hounds! …or gently open Belongings.",
         "That's unpossible! …unless you tap something.",
+        // More (still English — Springfield energy, family-app flavor)
+        "Eat my shorts — fine, maybe just tap Holidays.",
+        "You don't win friends with salad — you win with a shared calendar.",
+        "The goggles do nothing! …but these tiles actually help.",
+        "I bent my Wookiee. Relax — the belongings are fine.",
+        "Science. What has science ever done for us? …Besides on-device photo hints.",
+        "Stupid Flanders… probably already organized his subscriptions.",
+        "I'm Idaho! …jk, I'm just picking a section.",
+        "Mmm… sixty-four slices of American family data.",
+        "Can't sleep — clown'll eat me. This app is clown-free. Probably.",
+        "A little from Column A, a little from Column B… pick a tile.",
+        "It'll happen to you! …unless you back up your data.",
+        "Embiggens your family plans. Cromulent choice.",
+        "Worst. Guest Wi‑Fi password. Ever. — still better saved in Properties.",
+        "Hi, everybody! — Hi, Dr. Nick! …Wrong couch, right app.",
+        "Bon voyage plans beat bonfire of the insanities. Open Holidays.",
+        "Mr. Plow says: clear the driveway, then clear your ideas list.",
+        "Is there a chance the track could bend? Not on your life, my calendar friend.",
+        "I'm not not licking toads — I'm picking tiles.",
+        "Krusty-approved family organization. Hey hey!",
+        "S-M-R-T — I mean S-M-A-R-T — tap something smart.",
+        "Donut panic: your trips, stuff, and subs are right here.",
+        "A noble spirit embiggens the smallest household spreadsheet.",
     ]
 
     @State private var subtitle: String = ""
+    @State private var showDataBackup = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                familyHeader
+        ZStack(alignment: .topTrailing) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    familyHeader
 
                 VStack(spacing: 6) {
-                    Text("The Gomsons")
+                    Text(String(localized: "app.title"))
                         .font(.system(size: 34, weight: .black, design: .rounded))
                         .foregroundStyle(SimpsonsTheme.charcoal)
                     Text(subtitle)
@@ -81,6 +106,23 @@ struct LandingPageView: View {
                 .padding(.bottom, 32)
             }
             .padding(.top, 16)
+            }
+            Button {
+                showDataBackup = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(SimpsonsTheme.charcoal.opacity(0.55))
+                    .padding(14)
+                    .background(SimpsonsTheme.white.opacity(0.45), in: Circle())
+            }
+            .accessibilityLabel(String(localized: "landing.data_backup"))
+            .padding(.top, 8)
+            .padding(.trailing, 12)
+        }
+        .sheet(isPresented: $showDataBackup) {
+            DataBackupSettingsView()
+                .environmentObject(CloudDataManager.shared)
         }
         .background {
             ZStack {
@@ -122,7 +164,7 @@ struct LandingPageView: View {
         .shadow(color: SimpsonsTheme.charcoal.opacity(0.14), radius: 12, y: 6)
         .padding(.horizontal, 28)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Family photo")
+        .accessibilityLabel(String(localized: "landing.family_photo"))
     }
 
     private var familyPlaceholderArt: some View {
@@ -158,7 +200,7 @@ struct LandingPageView: View {
             .padding(.top, 6)
             VStack {
                 Spacer()
-                Text("Add FamilyPhoto to Assets")
+                Text(String(localized: "landing.add_asset"))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(SimpsonsTheme.charcoal.opacity(0.55))
                     .padding(.horizontal, 12)
@@ -233,19 +275,19 @@ private struct SectionTileButton: View {
                 }
 
                 if showHighlight {
-                    Text("NEW")
+                    Text(String(localized: "landing.new_badge"))
                         .font(.system(size: 9, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(SimpsonsTheme.orange, in: Capsule())
                         .offset(x: -8, y: 8)
-                        .accessibilityLabel("New or updated")
+                        .accessibilityLabel(String(localized: "landing.new_updated"))
                 }
             }
         }
         .buttonStyle(.plain)
-        .accessibilityHint(showHighlight ? "Has new or updated content." : "")
+        .accessibilityHint(showHighlight ? String(localized: "landing.accessibility_hint") : "")
     }
 }
 

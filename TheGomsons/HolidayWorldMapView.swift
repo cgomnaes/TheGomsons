@@ -7,65 +7,201 @@ import MapKit
 import SwiftData
 import SwiftUI
 
-/// Trip stops and proposed ideas (not `Location` / home map). Simpler map look + distinct pin styles.
-struct HolidayWorldMapView: View {
-    @Query(sort: \HolidayDestination.arrivalDate, order: .reverse) private var allDestinations: [HolidayDestination]
-    @Query(sort: \VacationIdea.upvotes, order: .reverse) private var allIdeas: [VacationIdea]
+/// Shared base map look for holiday world + trip route maps.
+enum HolidayMapBaseStyle: String, CaseIterable, Identifiable {
+    case standard
+    case satellite
+    case hybrid
 
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .standard: String(localized: "map.style.standard")
+        case .satellite: String(localized: "map.style.satellite")
+        case .hybrid: String(localized: "map.style.hybrid")
+        }
+    }
+
+    var mapStyle: MapStyle {
+        switch self {
+        case .standard:
+            .standard(
+                elevation: .flat,
+                emphasis: .muted,
+                pointsOfInterest: .excludingAll,
+                showsTraffic: false
+            )
+        case .satellite:
+            .imagery(elevation: .flat)
+        case .hybrid:
+            .hybrid(
+                elevation: .flat,
+                pointsOfInterest: .excludingAll,
+                showsTraffic: false
+            )
+        }
+    }
+}
+
+/// What to show on the holiday world map (past trips, upcoming, ideas, or everything).
+enum HolidayWorldMapFilter: String, CaseIterable, Identifiable {
+    case all
+    case pastTrips
+    case upcoming
+    case ideas
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: String(localized: "map.filter.all")
+        case .pastTrips: String(localized: "map.filter.past")
+        case .upcoming: String(localized: "map.filter.upcoming")
+        case .ideas: String(localized: "map.filter.ideas")
+        }
+    }
+}
+
+/// One pin per saved trip (cover city), plus proposed ideas (not `Location` / home map). Stops are for each trip’s route map only.
+struct HolidayWorldMapView: View {
+    @Query(sort: \HolidayTrip.startDate, order: .reverse) private var allTrips: [HolidayTrip]
+    @Query(sort: \VacationIdea.proposedDestination, order: .forward) private var allIdeas: [VacationIdea]
+
+    @AppStorage("holidayMapBaseStyle") private var mapStyleRaw: String = HolidayMapBaseStyle.standard.rawValue
     @State private var position: MapCameraPosition = .automatic
+    @State private var mapFilter: HolidayWorldMapFilter = .all
+    /// Geocoded coordinates when a trip has no stored cover coordinates (cover place name, else main stay / trip name).
+    @State private var geocodedTripAnchors: [PersistentIdentifier: CLLocationCoordinate2D] = [:]
+
+    private var mapBaseStyle: HolidayMapBaseStyle {
+        HolidayMapBaseStyle(rawValue: mapStyleRaw) ?? .standard
+    }
+    /// Trips that need async geocoding: no saved cover coordinates but we have text to look up.
+    private var tripsEligibleForGeocodedPin: [(trip: HolidayTrip, query: String)] {
+        allTrips.compactMap { trip in
+            guard !trip.hasCoverMapCoordinate else { return nil }
+            guard let query = Self.tripWorldMapGeocodeQuery(for: trip) else { return nil }
+            return (trip, query)
+        }
+    }
+
+    /// Changes when eligible trips or their lookup strings change — triggers a fresh geocode pass.
+    private var anchorResolutionSignature: String {
+        tripsEligibleForGeocodedPin
+            .map { "\($0.trip.persistentModelID.hashValue)-\($0.query)" }
+            .sorted()
+            .joined(separator: "|")
+    }
 
     private var pins: [WorldMapPin] {
         var result: [WorldMapPin] = []
-        for dest in allDestinations where dest.hasPlottableCoordinate {
-            let kind: WorldMapPin.Kind
-            if let trip = dest.trip, !isTripEndedBeforeToday(trip) {
-                kind = .plannedTrip
-            } else {
-                kind = .pastTrip
+        if mapFilter == .all || mapFilter == .pastTrips || mapFilter == .upcoming {
+            for trip in allTrips {
+                let endedPast = trip.isPastTrip
+                switch mapFilter {
+                case .all:
+                    break
+                case .pastTrips:
+                    if !endedPast { continue }
+                case .upcoming:
+                    if endedPast { continue }
+                case .ideas:
+                    continue
+                }
+                let kind: WorldMapPin.Kind = endedPast ? .pastTrip : .plannedTrip
+                if trip.hasCoverMapCoordinate {
+                    result.append(
+                        WorldMapPin(
+                            id: "trip-cover-\(trip.persistentModelID)",
+                            coordinate: trip.coverMapCoordinate,
+                            title: Self.tripWorldMapPinTitle(trip),
+                            kind: kind
+                        )
+                    )
+                } else if let coord = geocodedTripAnchors[trip.persistentModelID] {
+                    result.append(
+                        WorldMapPin(
+                            id: "trip-geocoded-\(trip.persistentModelID)",
+                            coordinate: coord,
+                            title: Self.tripWorldMapPinTitle(trip),
+                            kind: kind
+                        )
+                    )
+                }
             }
-            result.append(
-                WorldMapPin(
-                    id: "dest-\(dest.persistentModelID)",
-                    coordinate: dest.coordinate,
-                    title: dest.annotationTitle,
-                    kind: kind
-                )
-            )
         }
-        for idea in allIdeas where idea.hasPlottableCoordinate {
-            result.append(
-                WorldMapPin(
-                    id: "idea-\(idea.persistentModelID)",
-                    coordinate: idea.coordinate,
-                    title: idea.mapAnnotationTitle,
-                    kind: .proposedIdea
+        if mapFilter == .all || mapFilter == .ideas {
+            for idea in allIdeas where idea.hasPlottableCoordinate {
+                result.append(
+                    WorldMapPin(
+                        id: "idea-\(idea.persistentModelID)",
+                        coordinate: idea.coordinate,
+                        title: idea.mapAnnotationTitle,
+                        kind: .proposedIdea
+                    )
                 )
-            )
+            }
         }
         return result
     }
 
+    private var emptyDescription: Text {
+        switch mapFilter {
+        case .all:
+            Text(String(localized: "map.empty.all_detail"))
+        case .pastTrips:
+            Text(String(localized: "map.empty.past_detail"))
+        case .upcoming:
+            Text(String(localized: "map.empty.upcoming_detail"))
+        case .ideas:
+            Text(String(localized: "map.empty.ideas_detail"))
+        }
+    }
+
     var body: some View {
-        Group {
-            if pins.isEmpty {
-                ContentUnavailableView(
-                    "No holiday pins yet",
-                    systemImage: "map.circle",
-                    description: Text(
-                        "Add stops to a trip and use “Look up place” to set coordinates, or propose a destination in Plan Next—the map shows past trips, upcoming trips, and ideas with different pins."
-                    )
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                Map(position: $position) {
-                    ForEach(pins) { pin in
-                        Annotation(pin.title, coordinate: pin.coordinate) {
-                            HolidayMapPinView(kind: pin.kind, seed: pin.id.hashValue)
-                        }
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                Picker(String(localized: "map.content"), selection: $mapFilter) {
+                    ForEach(HolidayWorldMapFilter.allCases) { mode in
+                        Text(mode.title).tag(mode)
                     }
                 }
-                .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll, showsTraffic: false))
+                .pickerStyle(.segmented)
+
+                Picker(String(localized: "map.style"), selection: $mapStyleRaw) {
+                    ForEach(HolidayMapBaseStyle.allCases) { style in
+                        Text(style.title).tag(style.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+
+            Group {
+                if pins.isEmpty {
+                    ContentUnavailableView(
+                        mapFilter == .all
+                            ? String(localized: "map.empty.all_title")
+                            : String(localized: "map.empty.filter_title"),
+                        systemImage: "map.circle",
+                        description: emptyDescription
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    Map(position: $position) {
+                        ForEach(pins) { pin in
+                            Annotation(pin.title, coordinate: pin.coordinate) {
+                                HolidayMapPinView(kind: pin.kind, seed: pin.id.hashValue)
+                            }
+                        }
+                    }
+                    .mapStyle(mapBaseStyle.mapStyle)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             fitCameraIfPossible()
@@ -73,12 +209,59 @@ struct HolidayWorldMapView: View {
         .onChange(of: pins.count) { _, _ in
             fitCameraIfPossible()
         }
+        .onChange(of: mapFilter) { _, _ in
+            fitCameraIfPossible()
+        }
+        .task(id: anchorResolutionSignature) {
+            await resolveTripAnchorCoordinates()
+        }
     }
 
-    private func isTripEndedBeforeToday(_ trip: HolidayTrip) -> Bool {
-        let endDay = Calendar.current.startOfDay(for: trip.endDate)
-        let today = Calendar.current.startOfDay(for: Date())
-        return endDay < today
+    /// Free-text to geocode when a trip has no saved cover coordinates: cover search label (if any), else main stay, else trip name.
+    private static func tripWorldMapGeocodeQuery(for trip: HolidayTrip) -> String? {
+        let cover = trip.coverPlaceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cover.isEmpty { return cover }
+        return anchorGeocodeQuery(for: trip)
+    }
+
+    private static func anchorGeocodeQuery(for trip: HolidayTrip) -> String? {
+        let acc = trip.mainAccommodation.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !acc.isEmpty { return acc }
+        let name = trip.tripName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty { return name }
+        return nil
+    }
+
+    private static func tripWorldMapPinTitle(_ trip: HolidayTrip) -> String {
+        let cover = trip.coverPlaceName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = trip.tripName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cover.isEmpty {
+            if name.isEmpty || name == cover { return cover }
+            return "\(cover) · \(name)"
+        }
+        let acc = trip.mainAccommodation.trimmingCharacters(in: .whitespacesAndNewlines)
+        let place = acc.isEmpty ? (name.isEmpty ? String(localized: "map.pin.trip_fallback") : name) : acc
+        if name.isEmpty || name == place {
+            return place
+        }
+        return "\(place) · \(name)"
+    }
+
+    private func resolveTripAnchorCoordinates() async {
+        let idAndQueries: [(PersistentIdentifier, String)] = await MainActor.run {
+            tripsEligibleForGeocodedPin.map { ($0.trip.persistentModelID, $0.query) }
+        }
+        guard !idAndQueries.isEmpty else {
+            await MainActor.run { geocodedTripAnchors = [:] }
+            return
+        }
+        var updated: [PersistentIdentifier: CLLocationCoordinate2D] = [:]
+        for (id, query) in idAndQueries {
+            if let c = try? await HolidayGeocoding.coordinate(for: query), !(c.latitude == 0 && c.longitude == 0) {
+                updated[id] = c
+            }
+        }
+        await MainActor.run { geocodedTripAnchors = updated }
     }
 
     private func fitCameraIfPossible() {
@@ -98,6 +281,99 @@ struct HolidayWorldMapView: View {
     }
 }
 
+// MARK: - Single-trip map (detail screen)
+
+/// Geographic view of one trip’s stops: pins in visit order and a path when there are multiple pins.
+struct HolidayTripStopsMapView: View {
+    let trip: HolidayTrip
+
+    @AppStorage("holidayMapBaseStyle") private var mapStyleRaw: String = HolidayMapBaseStyle.standard.rawValue
+    @State private var position: MapCameraPosition = .automatic
+
+    private var mapBaseStyle: HolidayMapBaseStyle {
+        HolidayMapBaseStyle(rawValue: mapStyleRaw) ?? .standard
+    }
+
+    private var sortedPlottable: [HolidayDestination] {
+        (trip.destinations ?? [])
+            .filter(\.hasPlottableCoordinate)
+            .sorted { $0.arrivalDate < $1.arrivalDate }
+    }
+
+    private var pinKind: WorldMapPin.Kind {
+        trip.isPastTrip ? .pastTrip : .plannedTrip
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if !sortedPlottable.isEmpty {
+                Picker(String(localized: "map.style"), selection: $mapStyleRaw) {
+                    ForEach(HolidayMapBaseStyle.allCases) { style in
+                        Text(style.title).tag(style.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Group {
+                if sortedPlottable.isEmpty {
+                    ContentUnavailableView(
+                        String(localized: "map.trip.empty_title"),
+                        systemImage: "mappin.slash",
+                        description: Text(String(localized: "map.trip.empty_detail"))
+                    )
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+                } else {
+                    Map(position: $position) {
+                        ForEach(sortedPlottable) { dest in
+                            Annotation(dest.annotationTitle, coordinate: dest.coordinate) {
+                                HolidayMapPinView(kind: pinKind, seed: dest.persistentModelID.hashValue)
+                            }
+                        }
+                        if sortedPlottable.count >= 2 {
+                            MapPolyline(coordinates: sortedPlottable.map(\.coordinate))
+                                .stroke(SimpsonsTheme.blue.opacity(0.9), lineWidth: 3)
+                        }
+                    }
+                    .mapStyle(mapBaseStyle.mapStyle)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+            }
+        }
+        .onAppear {
+            fitTripCamera()
+        }
+        .onChange(of: sortedPlottable.count) { _, _ in
+            fitTripCamera()
+        }
+    }
+
+    private func fitTripCamera() {
+        let coords = sortedPlottable.map(\.coordinate)
+        guard !coords.isEmpty else { return }
+        if coords.count == 1, let c = coords.first {
+            position = .region(
+                MKCoordinateRegion(center: c, span: MKCoordinateSpan(latitudeDelta: 0.8, longitudeDelta: 0.8))
+            )
+            return
+        }
+        let minLat = coords.map(\.latitude).min() ?? 0
+        let maxLat = coords.map(\.latitude).max() ?? 0
+        let minLon = coords.map(\.longitude).min() ?? 0
+        let maxLon = coords.map(\.longitude).max() ?? 0
+        let center = CLLocationCoordinate2D(
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLon + maxLon) / 2
+        )
+        let latSpan = max((maxLat - minLat) * 1.45, 0.35)
+        let lonSpan = max((maxLon - minLon) * 1.45, 0.35)
+        position = .region(MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: latSpan, longitudeDelta: lonSpan)))
+    }
+}
+
 // MARK: - Pin model
 
 private struct WorldMapPin: Identifiable {
@@ -106,7 +382,7 @@ private struct WorldMapPin: Identifiable {
         case pastTrip
         /// Trip still ongoing or in the future.
         case plannedTrip
-        /// From Plan Next vacation ideas.
+        /// From Ideas / proposals (not a saved trip yet).
         case proposedIdea
     }
 
@@ -146,9 +422,9 @@ private struct HolidayMapPinView: View {
 
     private var accessibilityLabel: String {
         switch kind {
-        case .pastTrip: "Past trip stop"
-        case .plannedTrip: "Upcoming or current trip stop"
-        case .proposedIdea: "Proposed vacation idea"
+        case .pastTrip: String(localized: "map.a11y.past")
+        case .plannedTrip: String(localized: "map.a11y.planned")
+        case .proposedIdea: String(localized: "map.a11y.idea")
         }
     }
 
@@ -209,7 +485,7 @@ extension HolidayDestination {
     }
 
     var annotationTitle: String {
-        let place = locationName.isEmpty ? "Stop" : locationName
+        let place = locationName.isEmpty ? String(localized: "map.pin.stop_fallback") : locationName
         if let tripName = trip?.tripName, !tripName.isEmpty {
             return "\(place) · \(tripName)"
         }
@@ -227,7 +503,7 @@ extension VacationIdea {
     }
 
     var mapAnnotationTitle: String {
-        let place = proposedDestination.isEmpty ? "Idea" : proposedDestination
+        let place = proposedDestination.isEmpty ? String(localized: "map.pin.idea_fallback") : proposedDestination
         return "\(place) · idea"
     }
 }
@@ -238,4 +514,17 @@ extension VacationIdea {
             for: [HolidayTrip.self, HolidayDestination.self, VacationIdea.self],
             inMemory: true
         )
+}
+
+// MARK: - HolidayTrip + world map
+
+extension HolidayTrip {
+    /// Non-zero coordinates from the cover-photo city search.
+    fileprivate var hasCoverMapCoordinate: Bool {
+        !(coverLatitude == 0 && coverLongitude == 0)
+    }
+
+    fileprivate var coverMapCoordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: coverLatitude, longitude: coverLongitude)
+    }
 }

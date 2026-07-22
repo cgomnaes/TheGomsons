@@ -1,0 +1,720 @@
+# Norwegian (nb): visible labels use natural Bokmål; common English loanwords (streaming, software, TV, fitness, …) stay as-is when they read naturally.
+tab.holidays|Holidays|Ferier
+tab.properties|Properties|Eiendommer
+tab.stash|Belongings|Eiendeler
+tab.calendar|Calendar|Kalender
+tab.subs|Subs|Abbo
+tab.family_tree|Family tree|Familien
+app.title|The Gomsons|The Gomsons
+common.delete|Delete|Slett
+common.cancel|Cancel|Avbryt
+common.save|Save|Lagre
+common.done|Done|Ferdig
+common.add|Add|Legg til
+common.edit|Edit|Rediger
+common.ok|OK|OK
+common.new|New|Ny
+common.remove|Remove|Fjern
+common.create|Create|Opprett
+common.optional|Optional|Valgfritt
+common.name|Name|Navn
+common.field_title|Title|Tittel
+event.field.location|Location|Sted
+event.field.assigned|Assigned to|Tildelt
+calendar.reminder_notify_day|Notify on the day|Varsle samme dag
+calendar.reminder_notify_at_event|Notify at event time|Varsle ved hendelse
+calendar.reminder_notify_before|Notify %lld min before|Varsle %lld min før
+calendar.reminder_footer_birthday|Birthdays use the start of that day (no time). Reminders fire relative to midnight. Allow notifications in Settings if you don’t see alerts.|Bursdager bruker starten av dagen (ingen tid). Varsler ved midnatt. Tillat varsler i Innstillinger hvis du ikke ser dem.
+calendar.reminder_footer_general|Allow notifications in Settings if you don’t see alerts.|Tillat varsler i Innstillinger hvis du ikke ser dem.
+common.notes|Notes|Notater
+common.details|Details|Detaljer
+common.type|Type|Type
+common.category|Category|Kategori
+common.website|Website|Nettsted
+common.login|Login|Innlogging
+common.billing|Billing|Betaling
+common.cost|Cost|Pris
+common.password|Password|Passord
+common.month|Month|Måned
+common.year|Year|År
+common.view|View|Visning
+common.section|Section|Seksjon
+common.branch|Branch|Gren
+common.none|None|Ingen
+common.untitled|Untitled|Uten navn
+common.unnamed|Unnamed|Uten navn
+common.primary|Primary|Hoved
+common.loading|Loading family data…|Laster familiedata…
+cocker.news.open_hint|Opens the related section|Åpner den tilhørende delen
+cocker.news.birthday_today|Woof — %@’s birthday is today!|Voff — %@ har bursdag i dag!
+cocker.news.birthday_tomorrow|Woof — %@’s birthday is tomorrow|Voff — %@ har bursdag i morgen
+cocker.news.birthday_soon|Woof — %@’s birthday in %d days|Voff — %@ har bursdag om %d dager
+cocker.news.dont_forget_today|Don’t forget today: %@|Ikke glem i dag: %@
+cocker.news.dont_forget_soon|Don’t forget in %2$d days: %1$@|Ikke glem om %2$d dager: %1$@
+cocker.news.warranty_today|Warranty ends today: %@|Garantien utløper i dag: %@
+cocker.news.warranty_soon|Warranty for %@ ends in %d days|Garanti for %@ utløper om %d dager
+cocker.news.trip_today|%@ starts today — ready?|%@ starter i dag — klar?
+cocker.news.trip_tomorrow|%@ starts tomorrow|%@ starter i morgen
+cocker.news.trip_soon|%@ starts in %d days|%@ starter om %d dager
+cocker.news.sub_today|%@ renews today|%@ fornyes i dag
+cocker.news.sub_soon|%@ renews in %d days|%@ fornyes om %d dager
+icloud.label|iCloud for The Gomsons|iCloud for The Gomsons
+icloud.refresh|Refresh status|Oppdater status
+sync.reload_local|Reload shared data on this device|Last inn delt data på denne enheten
+icloud.checking|Checking iCloud…|Sjekker iCloud…
+sync.family|Family sync|Familie-synk
+sync.family_footnote|The app keeps one shared family library in iCloud (holidays, properties, stash, calendar, subs, family tree). Every signed-in device should show the same entries. If someone only sees what they typed on their own phone, CloudKit is not importing others’ data—check Xcode for CloudKit errors, fix indexes in CloudKit Console, use the same TestFlight/App Store build for everyone, and confirm public record types allow reads for all family accounts—not creator-only.|Appen har ett delt familiebibliotek i iCloud (ferier, eiendom, utstyr, kalender, abonnement, slektstre). Alle innloggede enheter skal vise samme data. Ser du bare egne notater, sjekk CloudKit-feil, indekser i CloudKit Console, samme TestFlight/App Store-build, og at alle familiemedlemmer kan lese offentlige poster.
+sync.env_footnote|This install uses CloudKit’s Production database—the same pool as TestFlight and the App Store, including when you Run from Xcode. Everyone needs iCloud signed in and indexes configured in CloudKit Console (Production) if mirroring logs errors. Xcode changes to trips or properties are visible to testers; remove the Production container environment entitlement from the target if you need a separate Development database again.|Denne installasjonen bruker CloudKit Production (samme som TestFlight/App Store, også fra Xcode). Alle trenger iCloud og riktige indekser i CloudKit Console ved speilfeil. Endringer fra Xcode er synlige for testere; fjern Production-entitlement hvis du trenger egen utviklingsdatabase.
+export.section|Export|Eksporter
+export.backup_now|Export full backup now|Eksporter full sikkerhetskopi nå
+export.preparing|Preparing backup…|Forbereder sikkerhetskopi…
+export.recent|Recent backups|Siste sikkerhetskopier
+export.none|No exports yet—tap Export above.|Ingen eksporter ennå — trykk Eksporter over.
+export.about_restore|About restore|Om gjenoppretting
+export.restore_note|Restoring is for advanced recovery: replace the app’s data folder from a backup while the app is fully quit, using the same app version. Misuse can corrupt the database.|Gjenoppretting er for avansert gjenoppretting: erstatt appens datamappe fra en sikkerhetskopi mens appen er helt avsluttet, med samme appversjon. Feil kan ødelegge databasen.
+export.backup_description|Creates a folder in On My iPhone → The Gomsons → TheGomsonsBackups with a timestamp and a manifest file. Use it if a device is lost or data is corrupted.|Lager en mappe på «På min iPhone» → The Gomsons → TheGomsonsBackups med tidsstempel og manifest. Bruk hvis en enhet mistes eller data blir korrupt.
+data_backup.title|Data backup|Datasikkerhetskopi
+data_backup.export_failed|Could not export|Kunne ikke eksportere
+home.accessibility|Home|Hjem
+stash.title|Belongings|Eiendeler
+stash.empty|No belongings yet|Ingen eiendeler ennå
+stash.empty.detail|Add cars, boats, devices, watches, and other shared family items. Attach receipts, manuals, and links—and note where each one is.|Legg til biler, båter, enheter, klokker og andre felles eiendeler. Legg ved kvitteringer, manualer og lenker — og noter hvor hver ting er.
+stash.no_matches|No matches|Ingen treff
+stash.search_empty|Nothing in Belongings matches “%@”. Try another word or clear the search field.|Ingen treff på «%@» i Eiendeler. Prøv et annet ord eller tøm søket.
+stash.search_prompt|Search name, place, notes, category, or property|Søk i navn, sted, notater, kategori eller eiendom
+inventory.untitled_item|Untitled item|Gjenstand uten navn
+stash.add_photo|Add with photo|Legg til med bilde
+stash.capture.hint|Center the item in the frame|Sentrer gjenstanden i rammen
+stash.photo_a11y|Item photo|Gjenstandsbilde
+stash.add_property|Add property|Legg til eiendom
+properties.title|Properties|Eiendommer
+properties.empty|No properties yet|Ingen eiendommer ennå
+properties.empty.detail|Add a home or vacation place—track key facts, contacts, emergency numbers, Wi‑Fi, and on-site inventory.|Legg til hjem eller feriested — spor fakta, kontakter, nødnumre, Wi‑Fi og utstyr på stedet.
+property.new|New property|Ny eiendom
+property.section.property|Property|Eiendom
+property.field.address|Address|Adresse
+property.field.network|Network name|Nettverksnavn
+property.field.insurance_company|Insurance company|Forsikringsselskap
+property.emergency_field_prompt|Medical, egress, breaker panel, gas shutoff…|Medisinsk, rømning, sikringsskap, gass …
+property.field.bedrooms|Bedrooms|Soverom
+property.field.bathrooms|Bathrooms|Bad
+property.field.year_built|Year built|Byggeår
+property.unnamed|Unnamed property|Eiendom uten navn
+property.archived|Archived (%lld)|Arkivert (%lld)
+property.archive|Archive|Arkiver
+property.restore|Restore|Gjenopprett
+property.key_info|Key information|Nøkkelinfo
+property.wifi|Wi‑Fi|Wi‑Fi
+property.emergency_notes|On-site emergency notes|Nødnotater på stedet
+property.type_picker|Type|Type
+property.built|Built %lld|Bygget %lld
+calendar.title|Calendar|Kalender
+calendar.add_event|Add event|Legg til hendelse
+calendar.whats_next|What’s next|Kommer snart
+calendar.no_events|No upcoming events…|Ingen kommende hendelser. Trykk + for å legge til.
+calendar.dont_forget|Don’t forget|Ikke glem
+calendar.dont_forget_hint|Pin important dates…|Merk viktige datoer med «Ikke glem» når du redigerer.
+calendar.prev_month|Previous month|Forrige måned
+calendar.next_month|Next month|Neste måned
+calendar.prev_year|Previous year|Forrige år
+calendar.next_year|Next year|Neste år
+calendar.events_on|Events on %@|Hendelser %@
+calendar.all_month|All events this month|Alle hendelser denne måneden
+calendar.all_year|All events in %lld|Alle hendelser i %lld
+calendar.no_period|No events in this period.|Ingen hendelser i denne perioden.
+calendar.event|Event|Hendelse
+calendar.birth_date|Birth date|Fødselsdato
+calendar.date_time|Date & time|Dato og tid
+calendar.born_in|Born in|Født i
+calendar.details|Details|Detaljer
+calendar.reminder|Reminder|Påminnelse
+calendar.dont_forget_footer|Important dates appear…|Viktige datoer vises i «Ikke glem» på kalenderen.
+calendar.notify_day|Notify on the day|Varsle samme dag
+calendar.notify_before|Notify %lld min before|Varsle %lld min før
+calendar.notify_at_time|Notify at event time|Varsle ved tidspunkt
+calendar.event_footer_birthday|Pick month and day for the yearly celebration, the birth year for age, and a reminder below.|Velg måned og dag for den årlige feiringen, fødselsår for alder, og påminnelse under.
+calendar.events_footer|Allow notifications…|Tillat varsler i Innstillinger hvis du ikke ser dem.
+calendar.new_event|New event|Ny hendelse
+calendar.edit_event|Edit event|Rediger hendelse
+calendar.delete_event|Delete event|Slett hendelse
+calendar.delete_confirm_title|Delete this event?|Slette denne hendelsen?
+calendar.delete_confirm_msg|Reminders will be removed…|Påminnelser for denne hendelsen fjernes. Dette kan ikke angres.
+calendar.turns_age|Turns %lld|Fyller %lld
+calendar.scope_month|Month|Måned
+calendar.scope_year|Year|År
+calendar.today|Today|I dag
+calendar.tomorrow|Tomorrow|I morgen
+calendar.in_days|In %lld days · %@|Om %lld dager · %@
+calendar.today_time|Today · %@|I dag · %@
+calendar.tomorrow_time|Tomorrow · %@|I morgen · %@
+family_tree.title|Family tree|Slektstre
+family_tree.empty|No family members yet|Ingen familiemedlemmer ennå
+family_tree.empty.detail|Add people…|Legg til personer og sett mor/far så foreldre vises over barn. Filtrer gren for å fokusere.
+family_tree.add_person|Add person|Legg til person
+family_tree.search_prompt|Search names and notes|Søk i navn og notater
+family_tree.no_matches|No matches|Ingen treff
+family_tree.try_branch|Try another branch…|Prøv en annen gren eller tøm søk.
+family_tree.view_tree|Tree|Tre
+family_tree.view_list|List|Liste
+family_tree.branch_all|All|Alle
+family_tree.branch_household|Household|Husholdning
+family_tree.branch_my_line|My line|Min linje
+family_tree.branch_spouse|Spouse line|Ektefelles linje
+family_tree.branch_extended|Extended|Utvidet
+family_tree.partner|Partner: %@|Partner: %@
+family_tree.birthday_toggle|Birthday on file|Fødselsdag registrert
+family_tree.relationships|Relationships|Relasjoner
+family_tree.mother|Mother|Mor
+family_tree.father|Father|Far
+family_tree.partner_picker|Partner|Partner
+family_tree.tree_layout|Tree layout|Treoppsett
+family_tree.tier_stepper|Tier (lower = higher on tree): %lld|Nivå (lavere = høyere i treet): %lld
+family_tree.new_person|New person|Ny person
+family_tree.edit_person|Edit person|Rediger person
+family_tree.delete_person|Delete person|Slett person
+family_tree.upcoming_birthdays|Upcoming birthdays|Kommende bursdager
+family_tree.birthday_today|Today|I dag
+family_tree.birthday_tomorrow|Tomorrow|I morgen
+family_tree.birthday_in_days_fmt|in %lld days|om %lld dager
+family_tree.birthday_next_fmt|in %lld days · %@|om %lld dager · %@
+family_tree.profile_title|Profile|Profil
+family_tree.profile_birthday|Birthday|Bursdag
+family_tree.next_birthday|Next|Neste
+family_tree.turning_age|Turning|Fyller
+family_tree.profile_partner|Partner|Partner
+family_tree.message|Message|Melding
+family_tree.hobbies|Hobbies|Hobbyer
+family_tree.hobbies_placeholder|Hiking, cooking, music…|Fotturer, matlaging, musikk…
+family_tree.partner_status|Status|Status
+family_tree.partner_status.dating|Dating|Kjærester
+family_tree.partner_status.engaged|Engaged|Forlovet
+family_tree.partner_status.married|Married|Gift
+family_tree.partner_status.partner|Partner|Partner
+family_tree.deceased_badge|Deceased|Død
+family_tree.deceased_toggle|Deceased|Død
+family_tree.death_date|Date of death|Dødsdato
+family_tree.death_date_toggle|Death date known|Dødsdato kjent
+family_tree.died_on_fmt|Died %@|Døde %@
+family_tree.age_at_death|Age at death|Alder ved død
+family_tree.siblings|Siblings|Søsken
+family_tree.siblings_fmt|Siblings: %@|Søsken: %@
+family_tree.siblings_footer|People who share a mother or father are siblings automatically. Link others here when parents aren’t listed.|Personer som deler mor eller far er søsken automatisk. Koble andre her når foreldre ikke er registrert.
+family_tree.siblings_empty|Add more people to link siblings.|Legg til flere personer for å koble søsken.
+family_tree.sibling_via_parents|via parents|via foreldre
+family_tree.import_warn_sibling_fmt|Sibling “%@” not found for %@.|Søsken «%@» ble ikke funnet for %@.
+subs.title|Subs|Abbo
+subs.empty|No subscriptions yet|Ingen abonnement ennå
+subs.empty.detail|Track streaming…|Følg streaming, klubber, forsikring og mer — med nettsted, innlogging, fornyelse og kostnad.
+subs.period|Period|Periode
+subs.period.monthly|Monthly|Månedlig
+subs.period.yearly|Yearly|Årlig
+subs.per_month|per month|per måned
+subs.per_year|per year|per år
+subs.summary_line|across all included subs|for alle inkluderte abonnement
+subs.summary_monthly_line|per month across all included subs|per måned for alle inkluderte abonnement
+subs.summary_yearly_line|per year across all included subs|per år for alle inkluderte abonnement
+subs.category|Category|Kategori
+subs.filter.all|All|Alle
+subs.filter.streaming|Streaming|Streaming
+subs.filter.clubs|Clubs|Klubber
+subs.filter.insurance|Insurance|Forsikring
+subs.add|Add subscription|Legg til abonnement
+subs.subscription|Subscription|Abonnement
+subs.email_username|Email / Username|E-post / brukernavn
+subs.website_placeholder|https://…|https://…
+subs.in_summary|In summary|I oppsummering
+subs.renews|Renews|Fornyes
+subs.expires|Expires|Utløper
+subs.renews_on|Renews %@|Fornyes %@
+subs.expires_on|Expires %@|Utløper %@
+subs.edit|Edit|Rediger
+subs.open_browser|Open in browser|Åpne i nettleser
+subs.amount_optional|Amount (optional)|Beløp (valgfritt)
+subs.billing_picker|Billing|Betaling
+subs.email_or_username|Email or username|E-post eller brukernavn
+subs.stored_hint|Stored in your family data…|Lagre i familiens data som andre notater — bruk passordmanager for best sikkerhet.
+subs.include_summary|Include in cost summary|Inkluder i kostnadssum
+subs.renewal_toggle|Renewal date|Fornyelsesdato
+subs.expiry_toggle|Expiry date|Utløpsdato
+subs.expiry_notify|You'll be notified 2 days before expiry.|Du får varsel 2 dager før utløp.
+subs.new_sub|New sub|Nytt abonnement
+subs.edit_sub|Edit sub|Rediger abonnement
+subs.notes_hint|Phone numbers, policy numbers…|Telefonnumre, policynumre, hint …
+holidays.hub.title|Holiday Hub|Feriehub
+holidays.hub.section_picker|Section|Seksjon
+holidays.hub.upcoming|Upcoming|Kommende
+holidays.hub.ideas|Ideas|Ideer
+holidays.hub.past|Past|Tidligere
+holidays.hub.map|Map|Kart
+holidays.new_upcoming|New upcoming trip|Ny kommende tur
+holidays.log_past|Log past trip|Logg tidligere tur
+trips.empty.upcoming|No upcoming trips|Ingen kommende turer
+trips.empty.past|No past trips yet|Ingen tidligere turer ennå
+trips.empty.desc.upcoming|Add a trip with dates, stops, and who’s going. Start with Ideas, then build the plan here.|Legg til tur med datoer, stopp og hvem som drar. Bruk Ideer først, så bygg planen her.
+trips.empty.desc.past|Log where you’ve been and who went—photos, stops, and family together.|Logg hvor dere har vært og hvem som var med — bilder, stopp og familie samlet.
+trip.untitled|Untitled trip|Tur uten navn
+trip.add_who_went|Add who went|Legg til hvem som var med
+trip.add_who_going|Add who’s going|Legg til hvem som drar
+trip.crew|Crew|Lag
+trip.stops_count|%lld stop|%lld stopp
+trip.stops_count_plural|%lld stops|%lld stopp
+trip.title_fallback|Trip|Tur
+trip.delete|Delete trip|Slett tur
+trip.edit|Edit|Rediger
+trip.delete_confirm_past|Delete this past trip? Stops and travelers are removed too.|Slette denne tidligere turen? Stopp og deltakere fjernes også.
+trip.delete_confirm_upcoming|Delete this upcoming trip? Stops and travelers are removed too.|Slette denne kommende turen? Stopp og deltakere fjernes også.
+trip.notes|Notes|Notater
+trip.notes.hint|Packing lists, bookings, memories—editable here or in Edit trip.|Pakkelister, bookinger, minner — rediger her eller i Rediger tur.
+trip.travel_stay|Travel & stay|Reise og opphold
+trip.airline|Airline|Flyselskap
+trip.reference|Reference #|Referanse #
+trip.reference.prompt|Booking / PNR / confirmation|Booking / PNR / bekreftelse
+trip.main_accommodation|Main accommodation|Hovedovernatting
+trip.accommodation.prompt|Hotel, rental, or main place you’re staying|Hotell, leie, eller hovedsted
+trip.who_went|Who went|Hvem var med
+trip.who_going|Who’s going|Hvem drar
+trip.travelers.hint|Tap someone to edit, hold to remove. Use + to add.|Trykk noen for å redigere, hold for å fjerne. Bruk + for å legge til.
+trip.add_travelers|Add travelers|Legg til reisefølge
+trip.no_travelers|No one added yet|Ingen lagt til ennå
+trip.edit_name|Edit name & role|Rediger navn og rolle
+trip.remove_from_trip|Remove from trip|Fjern fra tur
+trip.stops|Stops|Stopp
+trip.stops.map_hint|Stops build your route map on this trip; the holiday world map uses the cover city from Edit trip.|Stopp bygger rute på turen; ferieverdenskartet bruker omslagsby fra Rediger tur.
+trip.travelers.a11y|Add travelers|Legg til reisefølge
+trip.map.past|Trip map|Turkart
+trip.map.route|Route map|Rutekart
+trip.map.past_desc|Places you visited, in visit order.|Steder du besøkte, i rekkefølge.
+trip.map.route_desc|Your stops in order—line shows the path when there are multiple pins.|Dine stopp i rekkefølge — linje viser ruten når det er flere nåler.
+trip.no_stops.past|No stops yet—tap + to add a place you visited.|Ingen stopp ennå — trykk + for å legge til et besøkt sted.
+trip.no_stops.future|No stops yet—tap + to plan where you’ll be.|Ingen stopp ennå — trykk + for å planlegge hvor dere vil være.
+trip.name|Name|Navn
+trip.stop_title|Stop|Stopp
+trip.add_stop_nav|Add stop|Legg til stopp
+trip.place.place|Place|Sted
+trip.place.city|City or place name|By eller stedsnavn
+trip.place.lookup|Looking up…|Slår opp…
+trip.place.fill_coords|Fill coordinates from name (first match)|Fyll koordinater fra navn (første treff)
+trip.latitude|Latitude|Breddegrad
+trip.longitude|Longitude|Lengdegrad
+trip.lat.prompt|Filled by lookup or type e.g. 59.9139|Fylles ved oppslag eller skriv f.eks. 59,9139
+trip.lon.prompt|Filled by lookup or type e.g. 10.7522|Fylles ved oppslag eller skriv f.eks. 10,7522
+trip.place.footer|Search uses Apple’s map data (network). Pick a result to set the name and coordinates, or use the first-match button. Coordinates power this trip’s route map only.|Søk bruker Apples kartdata (nettverk). Velg et resultat for navn og koordinater, eller bruk første-treff-knappen. Koordinater styrer bare rutekartet for denne turen.
+trip.dates|Dates|Datoer
+trip.arrival|Arrival|Ankomst
+trip.departure|Departure|Avreise
+trip.activities|Activities / notes (optional)|Aktiviteter / notater (valgfritt)
+trip.alert.find_place|Couldn’t find place|Fant ikke sted
+trip.alert.save_stop|Couldn’t save stop|Kunne ikke lagre stopp
+trip.trip.name|Trip name|Turnavn
+trip.trip.prompt|e.g. Summer in Italy|f.eks. Sommer i Italia
+trip.cover.footer|We search Wikipedia for photos of that place (real pictures). If none are found, we fall back to satellite map views. Or choose any photo from your library. Search and pick a city to place the trip on the holiday world map; stops on the trip screen are only for your route map.|Vi søker etter Wikipedia-bilder av stedet (ekte bilder). Hvis ingen finnes, bruker vi satellitt. Eller velg bilde fra biblioteket. Søk og velg by for ferieverdenskartet; stopp på turskjermen er bare for rutekart.
+trip.date.start|Start|Start
+trip.date.end|End|Slutt
+trip.travel.stay.section|Travel & stay|Reise og opphold
+trip.travellers|Travellers|Reisende
+trip.travellers.none.hint|No one added yet. Use Add travellers below, or add from the trip screen.|Ingen lagt til ennå. Bruk Legg til reisende under, eller fra turskjermen.
+trip.add_travellers|Add travellers|Legg til reisende
+trip.travellers.footer.future|This becomes your planned trip—add stops and travellers from the trip screen.|Dette blir den planlagte turen — legg til stopp og reisende fra turskjermen.
+trip.travellers.footer.past|Use this to log a trip that already happened. Trips whose end date is before today appear under Past.|Bruk dette for å logge en tur som allerede skjedde. Turer som slutter før i dag vises under Tidligere.
+trip.edit_trip|Edit trip|Rediger tur
+trip.new_trip|New trip|Ny tur
+trip.log_past|Log past trip|Logg tidligere tur
+trip.couldnt_save|Couldn’t save trip|Kunne ikke lagre tur
+trip.traveller.edit|Edit traveller|Rediger reisende
+trip.traveller.section|Traveller|Reisende
+trip.role.optional|Role (optional)|Rolle (valgfritt)
+trip.role.prompt|e.g. Teen, Guest|f.eks. tenåring, gjest
+trip.couldnt_save_short|Couldn’t save|Kunne ikke lagre
+trip.remove_participant|Remove %@ from this trip?|Fjerne %@ fra denne turen?
+trip.this_person|this person|denne personen
+trip.add_travelers.title|Add travelers|Legg til reisende
+trip.family.hint.past|Turn on everyone who went—then tap Add once.|Slå på alle som var med — trykk «Legg til» én gang.
+trip.family.hint.future|Turn on everyone who’s going—then tap Add once.|Slå på alle som skal med — trykk «Legg til» én gang.
+trip.also_add|Also add (optional)|Legg også til (valgfritt)
+trip.custom.prompt|e.g. Grandma, Alex|f.eks. bestemor, Alex
+trip.use_guest|Use “Guest”|Bruk «Gjest»
+trip.role_all|Role for everyone added (optional)|Rolle for alle som legges til (valgfritt)
+trip.shown_under|Shown under each name|Vises under hvert navn
+trip.role.prompt2|e.g. Teen, toddler|f.eks. tenåring, småbarn
+trip.couldnt_save_travelers|Couldn’t save travelers|Kunne ikke lagre reisende
+trip.add_n|Add %lld|Legg til %lld
+trip.past_trips_title|Past Trips|Tidligere turer
+map.title|Map|Kart
+map.search|Map search|Kartsøk
+map.searching|Searching…|Søker…
+map.content|Map content|Kartinnhold
+map.style|Map type|Karttype
+map.style.standard|Standard|Standard
+map.style.satellite|Satellite|Satellitt
+map.style.hybrid|Hybrid|Hybrid
+map.filter.all|All|Alle
+map.filter.past|Past|Tidligere
+map.filter.upcoming|Upcoming|Kommende
+map.filter.ideas|Ideas|Ideer
+map.empty.all_title|No holiday pins yet|Ingen ferienåler ennå
+map.empty.filter_title|Nothing to show|Ingenting å vise
+map.empty.all_detail|Each trip uses the city you pick for the heading photo (Edit trip). Without that, we try your cover place name, main accommodation, or trip name. Stops only affect each trip’s route map. Ideas need a place or coordinates. Use All, Past, Upcoming, or Ideas above.|Hver tur bruker byen du velger for toppbildet (Rediger tur). Uten det prøver vi omslagssted, hovedovernatting eller turnavn. Stopp påvirker bare rutekartet for turen. Ideer trenger sted eller koordinater. Bruk Alle, Tidligere, Kommende eller Ideer over.
+map.empty.past_detail|No past trips to show yet. Edit a trip, search under the heading photo, and pick a city—or we’ll try to place it from main accommodation or the trip name.|Ingen tidligere turer å vise ennå. Rediger en tur, søk under toppbildet og velg by — eller vi prøver å plassere den fra hovedovernatting eller turnavn.
+map.empty.upcoming_detail|No upcoming trips to show yet. Set a cover city from Edit trip, or fill in main accommodation or the trip name so we can place the pin.|Ingen kommende turer å vise ennå. Sett omslagsby i Rediger tur, eller fyll inn hovedovernatting eller turnavn så vi kan plassere nålen.
+map.empty.ideas_detail|No vacation ideas with a map location yet. Add a proposal on the Ideas tab with a place search or coordinates.|Ingen ferieideer med kartsted ennå. Legg til et forslag under Ideer med stedsøk eller koordinater.
+map.trip.empty_title|No map pins yet|Ingen kartnåler ennå
+map.trip.empty_detail|Add a stop and use Look up place (or enter latitude and longitude) to see pins and a path on this trip’s route map.|Legg til et stopp og bruk stedssøk (eller skriv bredde- og lengdegrad) for å se nåler og rute på denne turens kart.
+planning.proposals|Proposals|Forslag
+planning.vote_hint|Vote thumbs-up as yourself. When all four have voted, we’ll say “Let’s do it!”|Stem tommel opp som deg selv. Når alle fire har stemt, sier vi «Vi gjør det!»
+planning.propose|Propose|Foreslå
+planning.voting_as|Voting as|Stemmer som
+planning.idea_footer|Suggest a place and rough dates—everyone votes here. Add the real trip under Upcoming when you’re ready.|Foreslå sted og omtrentlige datoer — alle stemmer her. Legg til ekte tur under Kommende når dere er klare.
+planning.empty_title|No proposals yet|Ingen forslag ennå
+planning.destination|Destination|Destinasjon
+planning.destination_placeholder|Destination|Destinasjon
+planning.idea|Idea|Idé
+planning.date_range|e.g. July 12–20|f.eks. 12.–20. juli
+planning.proposed_dates|Proposed dates|Foreslåtte datoer
+planning.notes_optional|Notes (optional)|Notater (valgfritt)
+planning.geocode_hint|Pick a place from map search for the best pin on the World Map, or type a name—we geocode when you add if needed.|Velg sted fra kartsøk for best nål på verdenskartet, eller skriv navn — vi geokoder ved behov.
+planning.title|Propose a trip|Foreslå tur
+planning.edit_title|Edit proposal|Rediger forslag
+planning.add|Add|Legg til
+planning.lets_do_it|Let’s do it!|Vi gjør det!
+planning.waiting|Waiting…|Venter…
+planning.vote|Vote|Stem
+planning.remove_vote|Remove your vote|Fjern stemmen din
+planning.delete|Delete proposal|Slett forslag
+planning.delete_confirm|Delete this proposal?|Slette dette forslaget?
+planning.proposal_actions|Proposal actions|Handlinger for forslag
+planning.city_or_place|City or place|By eller sted
+planning.search_places|Search cities & places (map)|Søk byer og steder (kart)
+planning.cover_heading|Cover image|Omslagsbilde
+planning.cover_city|City for cover photo|By for omslagsbilde
+planning.cover_search|Search city for cover image|Søk by for omslagsbilde
+planning.cover_footer|Optional—same Wikipedia / satellite search as trips, or a photo from your library. The map pin still uses the destination above.|Valgfritt — samme Wikipedia-/satellittsøk som turer, eller bilde fra biblioteket. Kartnålen bruker fortsatt destinasjonen over.
+holidays.import_tripit|Import from TripIt…|Importer fra TripIt…
+holidays.add_or_import_a11y|Add or import trip|Legg til eller importer tur
+cover.search|Search by city, then pick a result|Søk etter by, velg resultat
+cover.choose_photo|Choose photo from library|Velg bilde fra bibliotek
+cover.remove_heading|Remove heading photo|Fjern toppbilde
+cover.alert|Cover image|Omslagsbilde
+trip.section|Trip|Tur
+trip.family|Family|Familie
+trip.actions.a11y|Trip actions|Turhandlinger
+trip.add_stop.a11y|Add stop|Legg til stopp
+trip.reference.field|Reference # (booking / PNR)|Referanse # (booking / PNR)
+trip.guest_name|Guest|Gjest
+cover.heading_title|Heading photo|Toppbilde
+cover.finding_photos|Finding photos…|Finner bilder…
+cover.loading_previews|Loading previews…|Laster forhåndsvisninger…
+cover.satellite_overview|City overview (satellite)|Byoversikt (satellitt)
+cover.satellite_named|%@ (satellite)|%@ (satellitt)
+cover.default_footer|We search Wikipedia for photos of that place (real pictures). If none are found, we fall back to satellite map views. Or choose any photo from your library. The trip name above stays as you typed it.|Vi søker etter Wikipedia-bilder av stedet (ekte bilder). Hvis ingen finnes, bruker vi satellitt. Eller velg bilde fra biblioteket. Turnavnet over forblir som du skrev det.
+common.close|Close|Lukk
+tripit.title|Import TripIt|Importer TripIt
+tripit.intro|Export a trip as a calendar (.ics) file from TripIt on the web, or paste your TripIt calendar feed URL from Settings → Calendar Feed.|Eksporter en tur som kalenderfil (.ics) fra TripIt på nett, eller lim inn kalenderfeed-URL fra Innstillinger → Kalenderfeed.
+tripit.import_file|Import a file|Importer en fil
+tripit.choose_ics|Choose TripIt .ics file…|Velg TripIt .ics-fil…
+tripit.feed_header|Or paste feed URL|Eller lim inn feed-URL
+tripit.feed_placeholder|https://www.tripit.com/… or webcal://…|https://www.tripit.com/… eller webcal://…
+tripit.fetch_feed|Fetch calendar feed|Hent kalenderfeed
+tripit.feed_footer|TripIt’s feed usually covers about the last 90 days plus upcoming trips. Older trips: export each .ics from the TripIt website.|TripIt-feed dekker vanligvis ca. siste 90 dager pluss kommende turer. Eldre turer: eksporter hver .ics fra TripIt-nettsiden.
+tripit.select_all|Select all|Velg alle
+tripit.deselect_all|Deselect all|Fjern alle
+tripit.trips_found|Trips found (%lld)|Turer funnet (%lld)
+tripit.segment_count|%lld segment|%lld segment
+tripit.segment_count_plural|%lld segments|%lld segmenter
+tripit.import_n|Import %lld trip|Importer %lld tur
+tripit.import_n_plural|Import %lld trips|Importer %lld turer
+tripit.loaded|Loaded %lld trip from %@.|Lastet %lld tur fra %@.
+tripit.loaded_plural|Loaded %lld trips from %@.|Lastet %lld turer fra %@.
+tripit.imported|Imported %lld.|Importerte %lld.
+tripit.skipped_duplicates|Skipped %lld duplicate(s).|Hoppet over %lld duplikat(er).
+tripit.source_feed|calendar feed|kalenderfeed
+map.pin.trip_fallback|Trip|Tur
+map.pin.stop_fallback|Stop|Stopp
+map.pin.idea_fallback|Idea|Idé
+map.a11y.past|Past trip stop|Stopp på tidligere tur
+map.a11y.planned|Upcoming or current trip stop|Stopp på kommende eller pågående tur
+map.a11y.idea|Proposed vacation idea|Foreslått ferieidé
+geocode.empty|Enter a place name to look up.|Skriv inn et stedsnavn å slå opp.
+geocode.no_results|No location found. Try a different spelling or enter latitude and longitude.|Fant ikke sted. Prøv annen stavemåte, eller skriv bredde- og lengdegrad.
+tripit.err.empty|The file or feed was empty.|Filen eller feeden var tom.
+tripit.err.not_calendar|That doesn’t look like a TripIt / iCalendar (.ics) file.|Det ser ikke ut som en TripIt-/iCalendar-fil (.ics).
+tripit.err.no_events|No trip events were found in the calendar data.|Fant ingen turhendelser i kalenderdataene.
+tripit.err.invalid_url|Paste a valid TripIt calendar feed URL (https:// or webcal://).|Lim inn en gyldig TripIt-kalenderfeed-URL (https:// eller webcal://).
+tripit.err.http|TripIt feed returned HTTP %lld. Check that the feed URL is enabled and copied fully.|TripIt-feed returnerte HTTP %lld. Sjekk at feed-URL-en er aktivert og kopiert fullstendig.
+tripit.warn.all_duplicates|Every selected trip was already in Holidays.|Alle valgte turer lå allerede under Ferie.
+tripit.imported_trip|Imported trip|Importert tur
+tripit.imported_from|Imported from TripIt|Importert fra TripIt
+inventory.family_wide|Family-wide|Felles (hele familien)
+inventory.where|Where it is|Hvor den er
+inventory.where.footer|Leave property empty for family-wide items, or pick a home/cabin. Use the detail field for garage, loft, or who’s holding it.|La eiendom stå tom for felles ting, eller velg hus/hytte. Bruk detaljefeltet for garasje, loft eller hvem som har den.
+inventory.location_detail|Location detail|Stedsdetalj
+inventory.location_detail.prompt|Garage, loft, with Herman…|Garasje, loft, hos Herman …
+inventory.photo.footer|Center the item in the frame. On-device Vision suggests type and brand — cars, boats, devices, watches, and more.|Sentrer gjenstanden i rammen. Vision på enheten foreslår type og merke — bil, båt, enheter, klokker med mer.
+inventory.type.footer|Brand and category — tap if the suggested type isn’t right.|Merke og kategori — trykk hvis forslaget ikke stemmer.
+inventory.edit_title|Edit belonging|Rediger eiendel
+inventory.add_title|Add belonging|Legg til eiendel
+inventory.delete_item_confirm|Delete this belonging?|Slette denne eiendelen?
+inventory.purchase_place|Bought at|Kjøpt hos
+inventory.purchase_place.prompt|Store, website, or person|Butikk, nettsted eller person
+inventory.purchase_insurance|Purchase & insurance|Kjøp og forsikring
+inventory.purchase_insurance.footer|Estimated value helps with insurance. Add policy or rider notes if useful.|Anslått verdi hjelper ved forsikring. Legg til polise- eller tilleggsnotater ved behov.
+inventory.insurance_notes|Insurance notes|Forsikringsnotater
+inventory.product_url|Product / support website|Produkt- / supportsider
+inventory.open_link|Open website|Åpne nettsted
+inventory.links|Links|Lenker
+inventory.links.footer|Add shop, manual, or support pages. The product URL above is the main one.|Legg til butikk-, manual- eller supportsider. Produkt-URL over er hovedlenken.
+inventory.link_title|Link title|Lenketittel
+inventory.link_title.prompt|e.g. Manual, Shop|f.eks. Manual, Butikk
+inventory.link_url|URL|URL
+inventory.add_link|Add another link|Legg til flere lenker
+inventory.documents|Receipts & documents|Kvitteringer og dokumenter
+inventory.documents.footer|Attach PDF or photo receipts, manuals, and guarantees (prefer under about 20 MB each).|Legg ved PDF eller bilde av kvitteringer, manualer og garantier (helst under ca. 20 MB hver).
+inventory.add_document|Attach document…|Legg ved dokument…
+inventory.doc.pick_kind|Document type|Dokumenttype
+inventory.doc.preview|Document|Dokument
+inventory.doc.receipt|Receipt|Kvittering
+inventory.doc.manual|Manual|Manual
+inventory.doc.guarantee|Guarantee / warranty|Garanti
+inventory.doc.other|Other document|Annet dokument
+inventory.notes.prompt|Serial number, model, reminders…|Serienummer, modell, påminnelser …
+inventory.remove_photo|Remove photo|Fjern bilde
+inventory.analyzing|Analyzing…|Analyserer…
+inventory.bought_at|Bought at %@|Kjøpt hos %@
+inventory.attachments_a11y|Has links or documents|Har lenker eller dokumenter
+inventory.photo|Photo|Bilde
+inventory.choose_photo|Choose photo|Velg bilde
+inventory.camera|Camera|Kamera
+inventory.analysis_hint|Uses on-device Vision…|Bruker Vision på enheten til å gjette gjenstand, kategori og synlige priser. Kun forslag.
+inventory.analysis|Analysis|Analyse
+inventory.item|Item|Gjenstand
+inventory.values|Values|Verdier
+inventory.est_value|Est. value|Anslått verdi
+inventory.list_price|Current / list price|Gjeldende / listepris
+inventory.dates|Dates|Datoer
+inventory.purchase|Purchase|Kjøp
+inventory.warranty|Warranty ends|Garanti slutt
+inventory.stored_at|Stored at|Ligger på
+inventory.delete|Delete belonging|Slett eiendel
+inventory.identify|Identify from photo|Gjenkjenn fra bilde
+inventory.delete_confirm|This can’t be undone.|Dette kan ikke angres.
+property.detail.title|Details|Detaljer
+property.add_photo|Add a photo|Legg til bilde
+property.remove_photo|Remove photo|Fjern bilde
+property.bedrooms|Bedrooms|Soverom
+property.bathrooms|Bathrooms|Bad
+property.year_built|Year built|Byggeår
+property.emergency.dial_hint|Police non-emergency…|Politi, gift, vaktmester utenfor arbeidstid …
+property.unlabeled|Unlabeled|Uten etikett
+property.emergency_numbers|Emergency numbers|Nødnumre
+property.emergency_contacts|Emergency contacts|Nødkontakter
+property.emergency_footer|Dialable numbers…|Ringbare numre over; legg til kontekst her (medisinsk, rømningsvei, sikringsskap, gass …).
+property.contact_people|Contact people|Kontaktpersoner
+property.contact_hint|Add a landlord…|Legg til utleier, sameie, håndverker eller nabo.
+property.add_contact|Add contact|Legg til kontakt
+property.other_systems|Other systems|Andre systemer
+property.security_footer|Alarm, gate codes…|Alarm, portkoder, avstengning og smarte notater — på enheten; del bare med folk du stoler på.
+property.water_shutoff|Water shutoff|Vann avstengning
+property.trash_recycling|Trash & recycling|Søppel og resirkulering
+property.parking|Parking|Parkering
+property.smart_home|Smart home|Smart home
+property.contractors.hint|Electricians, plumbers…|Elektrikere, rørleggere, snekkere, håndverkere …
+property.add_contractor|Add contractor|Legg til håndverker
+property.contractors|Contractors|Håndverkere
+property.providers.hint|Electricity company…|Strøm, internett, offentlige tjenester …
+property.add_provider|Add service provider|Legg til leverandør
+property.service_providers|Service providers|Leverandører
+property.more_details|More details|Mer detaljer
+property.living_area|Living area (m²)|Boareal (m²)
+property.utilities_accounts|Utilities & accounts|Anlegg og kontoer
+property.inventory_empty|No belongings at this property yet.|Ingen eiendeler på denne eiendommen ennå.
+property.property_inventory|Belongings here|Eiendeler her
+property.list_price|List %@|Listepris %@
+property.est|Est. %@|Ansl. %@
+property.person.new|New contact|Ny kontakt
+property.person.role|Role|Rolle
+property.person.role_prompt|Landlord, HOA, neighbor…|Utleier, sameie, nabo …
+property.person.reach|Reach them|Kontakt
+property.person.notes|Notes|Notater
+property.emergency.new|Emergency number|Nødnummer
+property.emergency.label|Label|Etikett
+property.emergency.label_prompt|e.g. Police non-emergency|f.eks. politi, ikke nød
+property.emergency.quick|Quick add|Hurtiglegg til
+property.contractor.new|New contractor|Ny håndverker
+property.contractor.trade|Trade|Fag
+property.provider.new|New service provider|Ny leverandør
+property.provider.type|Type|Type
+property.acct|Acct: %@|Konto: %@
+landing.data_backup|Data backup|Datasikkerhetskopi
+landing.family_photo|Family photo|Familiebilde
+landing.add_asset|Add FamilyPhoto to Assets|Legg til FamilyPhoto i Assets
+landing.new_badge|NEW|NY
+landing.new_updated|New or updated|Nytt eller oppdatert
+landing.accessibility_hint|Has new or updated content.|Har nytt eller oppdatert innhold.
+family.parents_a11y|Parents|Foreldre
+family.name_placeholder|Name|Navn
+event.kind.birthday|Birthday|Bursdag
+event.kind.party|Party|Fest
+event.kind.holidaytrip|Holiday / trip|Ferie / tur
+event.kind.school|School & major dates|Skole og viktige datoer
+event.kind.other|Other|Annet
+sub.cat.streaming|Streaming|Streaming
+sub.cat.club|Club / membership|Klubb / medlemskap
+sub.cat.travel_ins|Travel insurance|Reiseforsikring
+sub.cat.software|Software|Software
+sub.cat.news|News & media|News & media
+sub.cat.fitness|Fitness & wellness|Fitness & wellness
+sub.cat.utilities|Utilities & phone|Utilities & phone
+sub.cat.other|Other|Annet
+sub.bill.monthly|Monthly|Månedlig
+sub.bill.quarterly|Quarterly|Kvartalsvis
+sub.bill.yearly|Yearly|Årlig
+sub.bill.onetime|One-time|Engangs
+family.branch.household|Our household|Vår husstand
+family.branch.my_parents|My parents’ line|Min foreldrelinje
+family.branch.spouse_parents|Spouse’s parents’ line|Ektefelles foreldrelinje
+family.branch.extended|Extended family|Utvidet familie
+inventory.section.vehicles|Vehicles & towing|Kjøretøy og slep
+inventory.section.yard|Yard & seasonal|Hage og sesong
+inventory.section.tools|Tools & workshop|Verksted og verktøy
+inventory.section.grills|Grills & outdoor cooking|Grill og utekjøkken
+inventory.section.electronics|Electronics|Elektronikk
+inventory.section.sports|Sports & recreation|Sport og fritid
+inventory.section.household|Household|Husholdning
+inventory.section.general|Other|Annet
+inventory.cat.car|Car|Bil
+inventory.cat.bicycle|Bicycle|Sykkel
+inventory.cat.boat|Boat|Båt
+inventory.cat.trailer|Trailer|Tilhenger
+inventory.cat.snow|Snow blower & winter|Snøfres og vinter
+inventory.cat.tools|Tools & power tools|Verktøy og elektroverktøy
+inventory.cat.outdoorCooking|Grills & outdoor cooking|Grill og utekjøkken
+inventory.cat.computers|Computers & laptops|Datamaskiner og bærbare
+inventory.cat.tv|TV & home theater|TV og hjemmekino
+inventory.cat.downhill|Downhill skis|Alpinski
+inventory.cat.telemark|Telemark skis|Telemarkski
+inventory.cat.xc|Cross-country skis|Langrenn
+inventory.cat.tennis|Tennis|Tennis
+inventory.cat.golf|Golf|Golf
+inventory.cat.household|Household items|Husholdningsgjenstander
+inventory.cat.other|Other|Annet
+property.belongings_empty|No belongings assigned to this property.|Ingen eiendeler knyttet til denne eiendommen.
+property.belongings_section|Belongings here|Eiendeler her
+inventory.cat.instrument|Musical instrument|Musikkinstrument
+inventory.cat.watch|Watch|Klokke
+inventory.cat.phoneTablet|Phones & tablets|Telefoner og nettbrett
+inventory.section.valuables|Watches & instruments|Klokker og instrumenter
+property.kind.house|House|Hus
+property.kind.cabin|Cabin|Hytte
+property.kind.apartment|Apartment|Leilighet
+property.kind.land|Land|Tomt
+property.kind.other|Other|Annet
+contractor.electrician|Electrician|Elektriker
+contractor.plumber|Plumber|Rørlegger
+contractor.handyman|Handyman|Håndverker
+contractor.snow|Snow plougher|Brøytebil
+contractor.carpenter|Carpenter|Snekker
+contractor.painter|Painter|Maler
+contractor.landscaper|Landscaper|Hageanlegg
+contractor.locksmith|Locksmith|Låsesmed
+contractor.other|Other|Annet
+svc.electricity|Electricity|Strøm
+svc.gas|Gas|Gass
+svc.water|Water|Vann
+svc.internet|Internet|Internett
+svc.public|Public services|Offentlige tjenester
+svc.insurance|Insurance|Forsikring
+svc.other|Other|Annet
+icloud.status.available|Signed in — changes can sync to iCloud|Pålogget — endringer kan synkes til iCloud
+icloud.status.no_account|No iCloud account…|Ingen iCloud-konto — åpne Innstillinger › Apple-ID og logg på iCloud
+icloud.status.restricted|iCloud is restricted…|iCloud er begrenset på denne enheten (Skjermetid / foreldrekontroll)
+icloud.status.unknown|Could not determine…|Kunne ikke avgjøre — prøv igjen etter å ha låst opp iCloud
+icloud.status.temp|iCloud temporarily unavailable…|iCloud midlertidig utilgjengelig — prøv senere
+icloud.status.unknown_default|Unknown status|Ukjent status
+
+property.add_belonging|Add belonging at this property|Legg til eiendel på denne eiendommen
+recipe.box_title|Recipe box|Oppskriftsbok
+recipe.place_title|Recipes here|Oppskrifter her
+recipe.add|Add recipe|Legg til oppskrift
+recipe.empty_title|No recipes yet|Ingen oppskrifter ennå
+recipe.empty_detail|Save cabin waffles, holiday favorites, and family staples—and tie them to a home or place.|Lagre hyttevaffler, feriefavoritter og familiens faste—knytt dem til hus eller sted.
+recipe.empty_place_title|No recipes for this place|Ingen oppskrifter for dette stedet
+recipe.empty_place_detail|Add a recipe that belongs with this home or cabin.|Legg til en oppskrift som hører til dette huset eller hytta.
+recipe.no_matches|No matches|Ingen treff
+recipe.search_prompt|Search recipes|Søk i oppskrifter
+recipe.search_empty|Nothing matches “%@”.|Ingen treff på “%@”.
+recipe.untitled|Untitled recipe|Oppskrift uten navn
+recipe.minutes_short|min|min
+recipe.ingredient_count|%d ingredients|%d ingredienser
+recipe.title_field|Title|Tittel
+recipe.prep_time|Prep time|Tilberedningstid
+recipe.property|Home / cabin|Hus / hytte
+recipe.place_label|Place note|Stedsnotat
+recipe.place_section|Place|Sted
+recipe.place_footer|Link to a property, or leave family-wide and use a place note (e.g. Marbella kitchen).|Knytt til eiendom, eller la den være felles med et stedsnotat (f.eks. Marbella-kjøkken).
+recipe.place.family|Family-wide|Felles
+recipe.ingredients|Ingredients|Ingredienser
+recipe.ingredient_placeholder|e.g. 2 eggs|f.eks. 2 egg
+recipe.add_ingredient|Add ingredient|Legg til ingrediens
+recipe.instructions|Instructions|Fremgangsmåte
+recipe.instructions_placeholder|Steps…|Steg…
+recipe.notes_placeholder|Serving tips, who loves it…|Serveringstips, hvem som elsker den…
+recipe.new|New recipe|Ny oppskrift
+recipe.edit|Edit recipe|Rediger oppskrift
+recipe.delete|Delete recipe|Slett oppskrift
+recipe.delete_confirm|Delete this recipe?|Slette denne oppskriften?
+property.recipes_section|Recipes|Oppskrifter
+property.add_recipe|Add recipe|Legg til oppskrift
+property.recipes_empty|No recipes tied to this place yet.|Ingen oppskrifter knyttet til dette stedet ennå.
+property.all_recipes|All recipes for this place|Alle oppskrifter for dette stedet
+maintenance.log_title|Maintenance log|Vedlikeholdslogg
+maintenance.place_title|Maintenance here|Vedlikehold her
+maintenance.add|Add maintenance|Legg til vedlikehold
+maintenance.empty_title|No maintenance logged|Ingen vedlikehold loggført
+maintenance.empty_detail|Track heat pumps, roofs, filters, and more—with next-due dates the whole family can see.|Følg varmepumpe, tak, filtre og mer—med neste frist hele familien ser.
+maintenance.empty_place_title|No log for this place|Ingen logg for dette stedet
+maintenance.empty_place_detail|Add the first service or check for this home.|Legg til første service eller sjekk for dette huset.
+maintenance.no_matches|No matches|Ingen treff
+maintenance.no_overdue|Nothing overdue|Ingenting forfalt
+maintenance.no_overdue_detail|All next-due dates are in the clear.|Alle frister er i orden.
+maintenance.search_prompt|Search maintenance|Søk i vedlikehold
+maintenance.search_empty|Nothing matches “%@”.|Ingen treff på “%@”.
+maintenance.filter_overdue|Show overdue only|Vis bare forfalt
+maintenance.untitled|Untitled entry|Oppføring uten navn
+maintenance.overdue_days|Overdue by %d days|Forfalt med %d dager
+maintenance.due_today|Due today|Forfaller i dag
+maintenance.due_tomorrow|Due tomorrow|Forfaller i morgen
+maintenance.due_in_days|Due in %d days|Forfaller om %d dager
+maintenance.title_field|What was done|Hva ble gjort
+maintenance.performed_at|Date done|Dato utført
+maintenance.performed_by|Done by|Utført av
+maintenance.cost|Cost|Kostnad
+maintenance.property|Home / cabin|Hus / hytte
+maintenance.property_required|Choose a place…|Velg et sted…
+maintenance.place_section|Place|Sted
+maintenance.place_footer|Every entry belongs to a home or cabin.|Hver oppføring hører til et hus eller en hytte.
+maintenance.has_next_due|Set next due date|Sett neste frist
+maintenance.next_due|Next due|Neste frist
+maintenance.schedule_section|Schedule|Plan
+maintenance.notes_placeholder|Parts used, contractor, meter reading…|Deler, leverandør, målerstand…
+maintenance.photo|Photo|Foto
+maintenance.add_photo|Add photo|Legg til foto
+maintenance.change_photo|Change photo|Bytt foto
+maintenance.remove_photo|Remove photo|Fjern foto
+maintenance.new|New maintenance|Nytt vedlikehold
+maintenance.edit|Edit maintenance|Rediger vedlikehold
+maintenance.delete|Delete entry|Slett oppføring
+maintenance.delete_confirm|Delete this maintenance entry?|Slette denne vedlikeholdsoppføringen?
+maintenance.category.hvac|HVAC / heat|Varme / ventilasjon
+maintenance.category.roof|Roof / exterior|Tak / utvendig
+maintenance.category.plumbing|Plumbing|Rør
+maintenance.category.electrical|Electrical|Elektro
+maintenance.category.outdoor|Outdoor / yard|Ute / hage
+maintenance.category.appliance|Appliance|Hvitevarer
+maintenance.category.security|Security / access|Sikkerhet / adgang
+maintenance.category.other|Other|Annet
+property.maintenance_section|Maintenance|Vedlikehold
+property.add_maintenance|Add maintenance|Legg til vedlikehold
+property.maintenance_empty|No maintenance logged for this place yet.|Ingen vedlikehold loggført for dette stedet ennå.
+property.all_maintenance|Full maintenance log|Full vedlikeholdslogg
+cocker.news.maint_overdue|Woof — %@ is overdue by %d days|Voff — %@ er forfalt med %d dager
+cocker.news.maint_today|Woof — %@ is due today|Voff — %@ forfaller i dag
+cocker.news.maint_soon|Woof — %@ due in %d days|Voff — %@ forfaller om %d dager

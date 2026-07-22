@@ -7,54 +7,59 @@ import Combine
 import Foundation
 import SwiftUI
 
-/// Primary tab destinations. Order here = order on landing page and tab bar.
+/// Primary app sections. Order here = order of tiles on the family landing page.
 enum AppRootTab: String, CaseIterable, Identifiable, Hashable {
     case holidays
-    case dashboard
     case properties
-    case inventory
-    case hub
+    case stash
+    case calendar
+    case subs
+    case familyTree
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .holidays: "Holidays"
-        case .dashboard: "Dashboard"
-        case .properties: "Properties"
-        case .inventory: "Inventory"
-        case .hub: "Hub"
+        case .holidays: String(localized: "tab.holidays")
+        case .properties: String(localized: "tab.properties")
+        case .stash: String(localized: "tab.stash")
+        case .calendar: String(localized: "tab.calendar")
+        case .subs: String(localized: "tab.subs")
+        case .familyTree: String(localized: "tab.family_tree")
         }
     }
 
     var systemImage: String {
         switch self {
         case .holidays: "airplane.circle.fill"
-        case .dashboard: "chart.bar.fill"
         case .properties: "building.2.fill"
-        case .inventory: "archivebox.fill"
-        case .hub: "square.grid.2x2.fill"
+        case .stash: "archivebox.fill"
+        case .calendar: "calendar.circle.fill"
+        case .subs: "creditcard.fill"
+        case .familyTree: "person.3.sequence.fill"
         }
     }
 
-    /// Bump when that area has noteworthy updates; stars clear after user opens that tab.
+    /// Bump when that area has noteworthy updates; stars clear after the user opens that section.
     var contentRevision: Int {
         switch self {
         case .holidays: 2
-        case .dashboard: 1
         case .properties: 1
-        case .inventory: 1
-        case .hub: 1
+        case .stash: 3
+        case .calendar: 2
+        case .subs: 1
+        case .familyTree: 3
         }
     }
 
     var tileColor: Color {
         switch self {
         case .holidays: SimpsonsTheme.blue
-        case .dashboard: SimpsonsTheme.orange
         case .properties: SimpsonsTheme.brown
-        case .inventory: SimpsonsTheme.pink
-        case .hub: SimpsonsTheme.green
+        case .stash: SimpsonsTheme.pink
+        case .calendar: SimpsonsTheme.green
+        case .subs: SimpsonsTheme.purple
+        case .familyTree: SimpsonsTheme.orange
         }
     }
 }
@@ -69,6 +74,7 @@ enum SimpsonsTheme {
     static let pink = Color(red: 0.96, green: 0.42, blue: 0.58)
     static let green = Color(red: 0.30, green: 0.78, blue: 0.38)
     static let brown = Color(red: 0.64, green: 0.42, blue: 0.24)
+    static let purple = Color(red: 0.45, green: 0.38, blue: 0.82)
     static let white = Color.white
     static let charcoal = Color(red: 0.15, green: 0.15, blue: 0.18)
 }
@@ -135,16 +141,17 @@ func homeButton(action: @escaping () -> Void) -> some View {
                 .foregroundStyle(SimpsonsTheme.charcoal)
         }
     }
-    .accessibilityLabel("Home")
+    .accessibilityLabel(String(localized: "home.accessibility"))
 }
 
-// MARK: - Open landing from tabs
+// MARK: - Return to family landing
 
 private struct OpenLandingKey: EnvironmentKey {
     static let defaultValue: () -> Void = {}
 }
 
 extension EnvironmentValues {
+    /// Leaves the current section and returns to the landing hub (resets that section’s stack).
     var openFamilyLanding: () -> Void {
         get { self[OpenLandingKey.self] }
         set { self[OpenLandingKey.self] = newValue }

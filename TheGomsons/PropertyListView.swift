@@ -9,38 +9,112 @@ import SwiftUI
 struct PropertyListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openFamilyLanding) private var openFamilyLanding
-    @Query(sort: \Property.name) private var properties: [Property]
+    @Query(sort: \Property.name) private var allProperties: [Property]
 
     @State private var showAddProperty = false
+    @State private var showArchived = false
+    @State private var showRecipes = false
+    @State private var showMaintenance = false
+
+    private var activeProperties: [Property] {
+        allProperties.filter { !$0.isArchived }
+    }
+
+    private var archivedProperties: [Property] {
+        allProperties.filter(\.isArchived).sorted { $0.archivedAt > $1.archivedAt }
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if properties.isEmpty {
+                if activeProperties.isEmpty && archivedProperties.isEmpty {
                     ContentUnavailableView(
-                        "No properties yet",
+                        String(localized: "properties.empty"),
                         systemImage: "building.2",
-                        description: Text("Add a home or vacation place—track key facts, contacts, emergency numbers, Wi‑Fi, and on-site inventory.")
+                        description: Text(String(localized: "properties.empty.detail"))
                     )
                 } else {
                     List {
-                        ForEach(properties) { property in
-                            NavigationLink {
-                                PropertyDetailView(property: property)
-                            } label: {
-                                PropertyRowView(property: property)
+                        if !activeProperties.isEmpty {
+                            ForEach(activeProperties) { property in
+                                NavigationLink {
+                                    PropertyDetailView(property: property)
+                                } label: {
+                                    PropertyRowView(property: property)
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button {
+                                        archiveProperty(property)
+                                    } label: {
+                                        Label(String(localized: "property.archive"), systemImage: "archivebox")
+                                    }
+                                    .tint(.orange)
+                                }
                             }
                         }
-                        .onDelete(perform: deleteProperties)
+
+                        if !archivedProperties.isEmpty {
+                            Section {
+                                DisclosureGroup(isExpanded: $showArchived) {
+                                    ForEach(archivedProperties) { property in
+                                        HStack {
+                                            PropertyRowView(property: property)
+                                                .opacity(0.6)
+                                            Spacer()
+                                        }
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                            Button(role: .destructive) {
+                                                modelContext.delete(property)
+                                            } label: {
+                                                Label(String(localized: "common.delete"), systemImage: "trash")
+                                            }
+                                        }
+                                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                            Button {
+                                                restoreProperty(property)
+                                            } label: {
+                                                Label(String(localized: "property.restore"), systemImage: "arrow.uturn.backward")
+                                            }
+                                            .tint(.green)
+                                        }
+                                    }
+                                } label: {
+                                    Label(
+                                        String(format: String(localized: "property.archived"), locale: .current, archivedProperties.count),
+                                        systemImage: "archivebox"
+                                    )
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
                     .listStyle(.insetGrouped)
                 }
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Properties")
+            .navigationTitle(String(localized: "properties.title"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     homeButton { openFamilyLanding() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showMaintenance = true
+                    } label: {
+                        Image(systemName: "wrench.and.screwdriver.fill")
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .accessibilityLabel(String(localized: "maintenance.log_title"))
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showRecipes = true
+                    } label: {
+                        Image(systemName: "frying.pan.fill")
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .accessibilityLabel(String(localized: "recipe.box_title"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -49,8 +123,14 @@ struct PropertyListView: View {
                         Image(systemName: "plus.circle.fill")
                             .symbolRenderingMode(.hierarchical)
                     }
-                    .accessibilityLabel("Add property")
+                    .accessibilityLabel(String(localized: "stash.add_property"))
                 }
+            }
+            .navigationDestination(isPresented: $showRecipes) {
+                RecipesListView()
+            }
+            .navigationDestination(isPresented: $showMaintenance) {
+                MaintenanceLogListView()
             }
             .sheet(isPresented: $showAddProperty) {
                 AddPropertySheet()
@@ -58,9 +138,27 @@ struct PropertyListView: View {
         }
     }
 
-    private func deleteProperties(at offsets: IndexSet) {
-        for index in offsets {
-            modelContext.delete(properties[index])
+    private func archiveProperty(_ property: Property) {
+        withAnimation {
+            property.isArchived = true
+            property.archivedAt = Date()
+        }
+        persistArchiveChange("archive")
+    }
+
+    private func restoreProperty(_ property: Property) {
+        withAnimation {
+            property.isArchived = false
+            property.archivedAt = .distantPast
+        }
+        persistArchiveChange("restore")
+    }
+
+    private func persistArchiveChange(_ label: String) {
+        do {
+            try modelContext.save()
+        } catch {
+            print("[TheGomsons] Property \(label) save failed: \(error.localizedDescription)")
         }
     }
 }
@@ -99,7 +197,7 @@ private struct PropertyRowView: View {
     private var propertyDetails: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(property.name.isEmpty ? "Unnamed property" : property.name)
+                Text(property.name.isEmpty ? String(localized: "property.unnamed") : property.name)
                     .font(.headline)
                 Spacer(minLength: 8)
                 Text(property.propertyKind.displayTitle)
@@ -117,7 +215,7 @@ private struct PropertyRowView: View {
                     .lineLimit(2)
             }
 
-            if let facts = property.formattedBedBathSqft {
+            if let facts = property.formattedBedBathArea {
                 Label(facts, systemImage: "ruler")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -125,7 +223,8 @@ private struct PropertyRowView: View {
             }
 
             if property.yearBuilt > 0 {
-                Text("Built \(property.yearBuilt)")
+                // Verbatim + String(year): avoid SwiftUI LocalizedStringKey formatting years as "1 982".
+                Text(String(format: String(localized: "property.built"), locale: .current, property.yearBuilt))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -202,49 +301,51 @@ struct AddPropertySheet: View {
     @State private var propertyKind: PropertyKind = PropertyKind.other
     @State private var bedrooms = ""
     @State private var bathrooms = ""
-    @State private var sqft = ""
     @State private var yearBuilt = ""
+    @State private var insuranceCompany = ""
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Property") {
-                    TextField("Name", text: $name)
-                    TextField("Address", text: $address, axis: .vertical)
+                Section(String(localized: "property.section.property")) {
+                    TextField(String(localized: "common.name"), text: $name)
+                    TextField(String(localized: "property.field.address"), text: $address, axis: .vertical)
                         .lineLimit(3 ... 6)
-                    Picker("Type", selection: $propertyKind) {
-                        ForEach(PropertyKind.allCases, id: \.self) { kind in
+                    Picker(String(localized: "property.type_picker"), selection: $propertyKind) {
+                        ForEach(PropertyKind.pickerCases, id: \.self) { kind in
                             Text(kind.displayTitle).tag(kind)
                         }
                     }
                 }
-                Section("Key facts (optional)") {
-                    TextField("Bedrooms", text: $bedrooms)
+                Section(String(localized: "property.key_info")) {
+                    TextField(String(localized: "property.field.bedrooms"), text: $bedrooms)
                         .keyboardType(.numberPad)
-                    TextField("Bathrooms", text: $bathrooms)
+                    TextField(String(localized: "property.field.bathrooms"), text: $bathrooms)
                         .keyboardType(.decimalPad)
-                    TextField("Living area (sq ft)", text: $sqft)
+                    TextField(String(localized: "property.field.year_built"), text: $yearBuilt)
                         .keyboardType(.numberPad)
-                    TextField("Year built", text: $yearBuilt)
-                        .keyboardType(.numberPad)
+                    TextField(String(localized: "property.field.insurance_company"), text: $insuranceCompany)
                 }
-                Section("Wi‑Fi") {
-                    TextField("Network name", text: $wifiNetwork)
-                    SecureField("Password", text: $wifiPassword)
+                Section(String(localized: "property.wifi")) {
+                    TextField(String(localized: "property.field.network"), text: $wifiNetwork)
+                    SecureField(String(localized: "common.password"), text: $wifiPassword)
                 }
-                Section("Safety") {
-                    TextField("On-site emergency notes", text: $emergencyNotes, axis: .vertical)
+                Section(String(localized: "property.emergency_notes")) {
+                    TextField(String(localized: "property.emergency_field_prompt"), text: $emergencyNotes, axis: .vertical)
                         .lineLimit(4 ... 8)
                 }
             }
-            .navigationTitle("New property")
+            .navigationTitle(String(localized: "property.new"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(String(localized: "common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(String(localized: "common.add")) {
+                        let yearDigits = String(yearBuilt.filter(\.isNumber).prefix(4))
+                        let roomDigits = String(bedrooms.filter(\.isNumber))
+                        let bathRaw = bathrooms.replacingOccurrences(of: ",", with: ".").replacingOccurrences(of: " ", with: "")
                         let property = Property(
                             name: name,
                             address: address,
@@ -252,13 +353,19 @@ struct AddPropertySheet: View {
                             wifiPassword: wifiPassword,
                             emergencyNotes: emergencyNotes,
                             propertyKind: propertyKind,
-                            bedrooms: Int(bedrooms) ?? 0,
-                            bathrooms: Double(bathrooms.replacingOccurrences(of: ",", with: ".")) ?? 0,
-                            livingAreaSqFt: Int(sqft) ?? 0,
-                            yearBuilt: Int(yearBuilt) ?? 0
+                            bedrooms: Int(roomDigits) ?? 0,
+                            bathrooms: Double(bathRaw) ?? 0,
+                            livingAreaSqFt: 0,
+                            yearBuilt: Int(yearDigits) ?? 0,
+                            insuranceCarrier: insuranceCompany
                         )
                         modelContext.insert(property)
-                        dismiss()
+                        do {
+                            try modelContext.save()
+                            dismiss()
+                        } catch {
+                            print("[TheGomsons] Failed to save new property: \(error.localizedDescription)")
+                        }
                     }
                     .fontWeight(.semibold)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

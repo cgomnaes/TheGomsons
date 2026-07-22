@@ -6,202 +6,138 @@
 import CoreLocation
 import SwiftData
 import SwiftUI
+import UIKit
 
-private enum HolidayAppUser: String, CaseIterable, Identifiable {
-    case pappa = "Pappa"
-    case mamma = "Mamma"
-    case cc = "CC"
-    case herman = "Herman"
-
-    var id: String { rawValue }
-}
-
-/// Voting on vacation ideas (top) and family holiday chat (bottom).
+/// Proposals and family voting—when all four vote thumbs-up, the idea shows “Let’s do it!”.
 struct HolidayPlanningView: View {
     @Environment(\.modelContext) private var modelContext
-    @AppStorage("holidayChatFamilyShortcut") private var shortcutRaw: String = "Pappa"
+    @AppStorage("holidayChatFamilyShortcut") private var shortcutRaw: String = HolidayFamilyVoter.pappa.rawValue
 
-    @Query(sort: \VacationIdea.upvotes, order: .reverse) private var ideas: [VacationIdea]
-    @Query(sort: \HolidayChatMessage.timestamp, order: .forward) private var chatMessages: [HolidayChatMessage]
+    @Query(sort: \VacationIdea.proposedDestination, order: .forward) private var ideas: [VacationIdea]
 
-    @State private var draftMessage = ""
     @State private var showProposeIdea = false
-    @FocusState private var chatFieldFocused: Bool
+    @State private var ideaToEdit: VacationIdea?
+    @State private var ideaPendingDelete: VacationIdea?
 
-    private var currentShortcut: HolidayAppUser {
-        HolidayAppUser(rawValue: shortcutRaw) ?? .pappa
+    private var sortedIdeas: [VacationIdea] {
+        ideas.sorted {
+            if $0.hasUnanimousFamilyVotes != $1.hasUnanimousFamilyVotes {
+                return $0.hasUnanimousFamilyVotes && !$1.hasUnanimousFamilyVotes
+            }
+            if $0.voteCount != $1.voteCount { return $0.voteCount > $1.voteCount }
+            return $0.proposedDestination.localizedCaseInsensitiveCompare($1.proposedDestination) == .orderedAscending
+        }
     }
 
     private var senderNameForMessages: String {
-        currentShortcut.rawValue
+        HolidayFamilyVoter(rawValue: shortcutRaw)?.rawValue ?? HolidayFamilyVoter.pappa.rawValue
     }
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-                votingSection
-                    .frame(height: max(geo.size.height * 0.42, 200))
-
-                Divider()
-
-                chatSection
-                    .frame(maxHeight: .infinity)
-            }
-        }
-        .background(Color(.systemGroupedBackground))
-        .sheet(isPresented: $showProposeIdea) {
-            ProposeVacationIdeaSheet()
-        }
-    }
-
-    // MARK: - Voting
-
-    private var votingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Vacation ideas")
-                    .font(.headline)
-                Spacer()
-                Button {
-                    showProposeIdea = true
-                } label: {
-                    Label("Propose", systemImage: "lightbulb.max.fill")
-                        .font(.subheadline.weight(.semibold))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(localized: "planning.proposals"))
+                            .font(.headline)
+                        Text(String(localized: "planning.vote_hint"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        showProposeIdea = true
+                    } label: {
+                        Label(String(localized: "planning.propose"), systemImage: "lightbulb.max.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
 
-            if ideas.isEmpty {
-                ContentUnavailableView(
-                    "No ideas yet",
-                    systemImage: "hand.thumbsup.circle",
-                    description: Text("Propose a destination and dates—family can vote with a thumbs up.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 14) {
-                        ForEach(ideas) { idea in
-                            VacationIdeaVoteCard(idea: idea)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(localized: "planning.voting_as"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(HolidayFamilyVoter.allCases) { user in
+                                let selected = user.rawValue == shortcutRaw
+                                Button {
+                                    shortcutRaw = user.rawValue
+                                } label: {
+                                    Text(user.rawValue)
+                                        .font(.subheadline.weight(.semibold))
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background {
+                                            Capsule()
+                                                .fill(selected ? Color.accentColor : Color(.tertiarySystemFill))
+                                        }
+                                        .foregroundStyle(selected ? Color.white : Color.primary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+
+                if sortedIdeas.isEmpty {
+                    ContentUnavailableView(
+                        String(localized: "planning.empty_title"),
+                        systemImage: "hand.thumbsup.circle",
+                        description: Text(String(localized: "planning.idea_footer"))
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 32)
+                } else {
+                    LazyVStack(spacing: 16) {
+                        ForEach(sortedIdeas) { idea in
+                            VacationIdeaVoteCard(
+                                idea: idea,
+                                currentVoterName: senderNameForMessages,
+                                onEdit: { ideaToEdit = idea },
+                                onDelete: { ideaPendingDelete = idea }
+                            )
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 24)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    // MARK: - Chat
-
-    private var chatSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Family chat")
-                .font(.headline)
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Chatting as")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(HolidayAppUser.allCases) { user in
-                            let selected = user.rawValue == shortcutRaw
-                            Button {
-                                shortcutRaw = user.rawValue
-                            } label: {
-                                Text(user.rawValue)
-                                    .font(.subheadline.weight(.semibold))
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background {
-                                        Capsule()
-                                            .fill(selected ? Color.accentColor : Color(.tertiarySystemFill))
-                                    }
-                                    .foregroundStyle(selected ? Color.white : Color.primary)
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(user.rawValue)
-                            .accessibilityAddTraits(selected ? .isSelected : [])
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(chatMessages) { msg in
-                            HolidayChatBubbleRow(
-                                message: msg,
-                                isFromCurrentUser: isCurrentUser(senderName: msg.senderName)
-                            )
-                            .id(msg.persistentModelID)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                }
-                .onAppear {
-                    scrollChatToBottom(proxy: proxy, animated: false)
-                }
-                .onChange(of: chatMessages.count) { _, _ in
-                    scrollChatToBottom(proxy: proxy, animated: true)
-                }
-            }
-
-            HStack(alignment: .bottom, spacing: 10) {
-                TextField("Message", text: $draftMessage, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...5)
-                    .focused($chatFieldFocused)
-
-                Button {
-                    sendMessage()
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title)
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .disabled(draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityLabel("Send")
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(.bar)
+        .background(Color(.systemGroupedBackground))
+        .sheet(isPresented: $showProposeIdea) {
+            VacationIdeaEditorSheet(idea: nil)
         }
-    }
-
-    private func isCurrentUser(senderName: String) -> Bool {
-        let a = senderName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return a == senderNameForMessages
-    }
-
-    private func sendMessage() {
-        let text = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        let msg = HolidayChatMessage(senderName: senderNameForMessages, messageText: text, timestamp: Date())
-        modelContext.insert(msg)
-        draftMessage = ""
-        chatFieldFocused = false
-    }
-
-    private func scrollChatToBottom(proxy: ScrollViewProxy, animated: Bool) {
-        guard let last = chatMessages.last else { return }
-        if animated {
-            withAnimation(.easeOut(duration: 0.25)) {
-                proxy.scrollTo(last.persistentModelID, anchor: .bottom)
+        .sheet(item: $ideaToEdit) { idea in
+            VacationIdeaEditorSheet(idea: idea)
+        }
+        .confirmationDialog(
+            String(localized: "planning.delete_confirm"),
+            isPresented: Binding(
+                get: { ideaPendingDelete != nil },
+                set: { if !$0 { ideaPendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "planning.delete"), role: .destructive) {
+                if let idea = ideaPendingDelete {
+                    modelContext.delete(idea)
+                    try? modelContext.save()
+                }
+                ideaPendingDelete = nil
             }
-        } else {
-            proxy.scrollTo(last.persistentModelID, anchor: .bottom)
+            Button(String(localized: "common.cancel"), role: .cancel) {
+                ideaPendingDelete = nil
+            }
         }
     }
 }
@@ -209,102 +145,203 @@ struct HolidayPlanningView: View {
 // MARK: - Idea card
 
 private struct VacationIdeaVoteCard: View {
+    @Environment(\.modelContext) private var modelContext
     @Bindable var idea: VacationIdea
+    let currentVoterName: String
+    var onEdit: () -> Void
+    var onDelete: () -> Void
+
+    private var voted: Bool {
+        idea.hasVoted(name: currentVoterName)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(idea.proposedDestination.isEmpty ? "Destination" : idea.proposedDestination)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .frame(maxWidth: 200, alignment: .leading)
-
-            if !idea.proposedDates.isEmpty {
-                Label(idea.proposedDates, systemImage: "calendar")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .labelStyle(.titleAndIcon)
-            }
-
-            if !idea.notes.isEmpty {
-                Text(idea.notes)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(3)
-            }
-
-            HStack {
-                Label("\(idea.upvotes)", systemImage: "hand.thumbsup.fill")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    idea.upvotes += 1
-                } label: {
-                    Image(systemName: "hand.thumbsup.fill")
-                        .font(.title3)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.accentColor.gradient, in: Circle())
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .bottomLeading) {
+                Group {
+                    if let ui = idea.coverUIImage {
+                        Image(uiImage: ui)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        LinearGradient(
+                            colors: [
+                                Color(hue: 0.58, saturation: 0.45, brightness: 0.55),
+                                Color(hue: 0.72, saturation: 0.5, brightness: 0.4),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .overlay {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 36, weight: .ultraLight))
+                                .foregroundStyle(.white.opacity(0.35))
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Upvote")
+                .frame(maxWidth: .infinity)
+                .frame(height: 120)
+                .clipped()
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.72)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: 120)
+
+                Text(
+                    idea.proposedDestination.isEmpty
+                        ? String(localized: "planning.destination_placeholder")
+                        : idea.proposedDestination
+                )
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
             }
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(
+                        idea.hasUnanimousFamilyVotes
+                            ? String(localized: "planning.lets_do_it")
+                            : String(localized: "planning.waiting")
+                    )
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(idea.hasUnanimousFamilyVotes ? Color.green : Color.secondary)
+                    Spacer(minLength: 8)
+                    Menu {
+                        Button {
+                            onEdit()
+                        } label: {
+                            Label(String(localized: "common.edit"), systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            onDelete()
+                        } label: {
+                            Label(String(localized: "planning.delete"), systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel(String(localized: "planning.proposal_actions"))
+                }
+
+                HStack(spacing: 10) {
+                    ForEach(HolidayFamilyVoter.allCases) { member in
+                        let on = idea.hasVoted(name: member.rawValue)
+                        VStack(spacing: 4) {
+                            Image(systemName: on ? "hand.thumbsup.fill" : "hand.thumbsup")
+                                .font(.caption)
+                                .foregroundStyle(on ? SimpsonsTheme.blue : Color.secondary.opacity(0.6))
+                            Text(member.rawValue)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+
+                if !idea.proposedDates.isEmpty {
+                    Label(idea.proposedDates, systemImage: "calendar")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                }
+
+                if !idea.notes.isEmpty {
+                    Text(idea.notes)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack {
+                    Label("\(idea.voteCount)/\(HolidayFamilyVoter.allCases.count)", systemImage: "hand.thumbsup.fill")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        idea.toggleVote(for: currentVoterName)
+                        try? modelContext.save()
+                    } label: {
+                        Image(systemName: voted ? "hand.thumbsup.fill" : "hand.thumbsup")
+                            .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(voted ? Color.white : SimpsonsTheme.blue)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle().fill(voted ? SimpsonsTheme.blue : Color(.tertiarySystemFill))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        voted
+                            ? String(localized: "planning.remove_vote")
+                            : String(localized: "planning.vote")
+                    )
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(14)
-        .frame(width: 220, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(.secondarySystemGroupedBackground))
                 .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
         }
-    }
-}
-
-// MARK: - Chat bubble
-
-private struct HolidayChatBubbleRow: View {
-    let message: HolidayChatMessage
-    let isFromCurrentUser: Bool
-
-    var body: some View {
-        HStack {
-            if isFromCurrentUser { Spacer(minLength: 48) }
-            VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                if !isFromCurrentUser {
-                    Text(message.senderName.isEmpty ? "Someone" : message.senderName)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                Text(message.messageText)
-                    .font(.body)
-                    .foregroundStyle(isFromCurrentUser ? Color.white : Color.primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(isFromCurrentUser ? Color.blue : Color(.systemGray5))
-                    }
-                Text(message.timestamp.formatted(date: .omitted, time: .shortened))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contextMenu {
+            Button {
+                onEdit()
+            } label: {
+                Label(String(localized: "common.edit"), systemImage: "pencil")
             }
-            if !isFromCurrentUser { Spacer(minLength: 48) }
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label(String(localized: "planning.delete"), systemImage: "trash")
+            }
         }
     }
 }
 
-// MARK: - Propose sheet
+private extension VacationIdea {
+    var coverUIImage: UIImage? {
+        guard let data = coverImageData else { return nil }
+        return UIImage(data: data)
+    }
+}
 
-private struct ProposeVacationIdeaSheet: View {
+// MARK: - Create / edit sheet
+
+private struct VacationIdeaEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+
+    /// `nil` = create new proposal.
+    let idea: VacationIdea?
 
     @State private var destination = ""
     @State private var dates = ""
     @State private var notes = ""
+    @State private var coverImageData: Data?
     @State private var isSaving = false
+    /// Set when the user picks a map search row (avoids a second geocode on save).
+    @State private var coordinateFromMapPick: CLLocationCoordinate2D?
+    @State private var isApplyingMapPick = false
+
+    private var isEditing: Bool { idea != nil }
 
     private var trimmedDestination: String {
         destination.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -313,23 +350,52 @@ private struct ProposeVacationIdeaSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Idea") {
-                    TextField("Destination", text: $destination)
-                    TextField("Proposed dates", text: $dates, prompt: Text("e.g. July 12–20"))
-                    TextField("Notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(3...6)
+                Section(String(localized: "planning.destination")) {
+                    TextField(String(localized: "planning.city_or_place"), text: $destination)
+                    HolidayMapPlaceSearchBlock(
+                        searchQuery: $destination,
+                        buttonTitle: String(localized: "planning.search_places"),
+                        onPick: { candidate in
+                            isApplyingMapPick = true
+                            destination = candidate.resolvedName
+                            coordinateFromMapPick = candidate.coordinate
+                            Task { @MainActor in
+                                isApplyingMapPick = false
+                            }
+                        }
+                    )
                 }
+                Section(String(localized: "planning.idea")) {
+                    TextField(
+                        String(localized: "planning.proposed_dates"),
+                        text: $dates,
+                        prompt: Text(String(localized: "planning.date_range"))
+                    )
+                    TextField(String(localized: "planning.notes_optional"), text: $notes, axis: .vertical)
+                        .lineLimit(3 ... 6)
+                }
+                HolidayCoverImageFormSection(
+                    coverImageData: $coverImageData,
+                    headingTitle: String(localized: "planning.cover_heading"),
+                    cityFieldTitle: String(localized: "planning.cover_city"),
+                    searchButtonTitle: String(localized: "planning.cover_search"),
+                    footerText: String(localized: "planning.cover_footer")
+                )
                 Section {
-                    Text("We look up the destination when you add the idea so it can appear on the World Map with a lightbulb pin. If the lookup misses, the idea is still saved—it just won’t show on the map until you edit it with a clearer place name.")
+                    Text(String(localized: "planning.geocode_hint"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("Propose a trip")
+            .navigationTitle(
+                isEditing
+                    ? String(localized: "planning.edit_title")
+                    : String(localized: "planning.title")
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(String(localized: "common.cancel")) { dismiss() }
                         .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -339,10 +405,30 @@ private struct ProposeVacationIdeaSheet: View {
                         if isSaving {
                             ProgressView()
                         } else {
-                            Text("Add").fontWeight(.semibold)
+                            Text(
+                                isEditing
+                                    ? String(localized: "common.save")
+                                    : String(localized: "planning.add")
+                            )
+                            .fontWeight(.semibold)
                         }
                     }
                     .disabled(trimmedDestination.isEmpty || isSaving)
+                }
+            }
+            .onAppear {
+                guard let idea else { return }
+                destination = idea.proposedDestination
+                dates = idea.proposedDates
+                notes = idea.notes
+                coverImageData = idea.coverImageData
+                if idea.hasPlottableCoordinate {
+                    coordinateFromMapPick = idea.coordinate
+                }
+            }
+            .onChange(of: destination) { _, _ in
+                if !isApplyingMapPick {
+                    coordinateFromMapPick = nil
                 }
             }
         }
@@ -353,20 +439,38 @@ private struct ProposeVacationIdeaSheet: View {
         defer { isSaving = false }
         var lat = 0.0
         var lon = 0.0
-        if let c = try? await HolidayGeocoding.coordinate(for: trimmedDestination) {
+        if let picked = coordinateFromMapPick {
+            lat = picked.latitude
+            lon = picked.longitude
+        } else if let existing = idea, existing.hasPlottableCoordinate,
+                  destination == existing.proposedDestination {
+            lat = existing.latitude
+            lon = existing.longitude
+        } else if let c = try? await HolidayGeocoding.coordinate(for: trimmedDestination) {
             lat = c.latitude
             lon = c.longitude
         }
         await MainActor.run {
-            let idea = VacationIdea(
-                proposedDestination: trimmedDestination,
-                proposedDates: dates,
-                notes: notes,
-                upvotes: 0,
-                latitude: lat,
-                longitude: lon
-            )
-            modelContext.insert(idea)
+            if let idea {
+                idea.proposedDestination = trimmedDestination
+                idea.proposedDates = dates
+                idea.notes = notes
+                idea.coverImageData = coverImageData
+                idea.latitude = lat
+                idea.longitude = lon
+                try? modelContext.save()
+            } else {
+                let created = VacationIdea(
+                    proposedDestination: trimmedDestination,
+                    proposedDates: dates,
+                    notes: notes,
+                    voterNamesJSON: "[]",
+                    coverImageData: coverImageData,
+                    latitude: lat,
+                    longitude: lon
+                )
+                modelContext.insert(created)
+            }
             dismiss()
         }
     }

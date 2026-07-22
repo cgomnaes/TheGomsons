@@ -1,0 +1,56 @@
+PublicSchema.ckdb — CloudKit Public Database declarative schema for TheGomsons.
+
+The .ckdb file must not contain // comments; cktool validate-schema and the server
+parser can fail with obscure errors if comments are embedded in the schema text.
+
+Authorize first: xcrun cktool save-token
+
+Schema workflow (required — cktool cannot write Production):
+1. Import into **Development** only:
+     xcrun cktool import-schema --team-id <TEAM_ID> \
+       --container-id iCloud.com.gomnaes.TheGomsons \
+       --environment development --file CloudKit/PublicSchema.ckdb
+   (`--environment production` fails with: endpoint not applicable in production.)
+2. Promote to Production in CloudKit Console:
+     https://icloud.developer.apple.com → container → Schema → **Deploy Schema Changes**
+   Review the diff (new types like CD_FamilyGroupPhoto, inventory fields, grants) → Deploy.
+
+This app’s entitlement pins Xcode + TestFlight / App Store to **Production**, so sync for
+family devices only works after step 2. Development is just the staging schema.
+
+If Xcode logs: "Cannot create or modify field '…' in record 'CD_*' in production schema",
+Production is missing that field — finish Development import + Deploy Schema to Production.
+
+GRANT WRITE TO "_icloud" allows any signed-in iCloud user to update existing records
+(collaborative editing). After import, confirm indexes (___modTime, recordName, etc.)
+in Console if mirroring logs still complain.
+
+Recipe ingredients: the app persists `ingredientsJSON` (maps to CD_ingredientsJSON).
+**Production cannot remove fields:** once CD_ingredients (BYTES) exists in Production,
+it must stay in PublicSchema.ckdb forever (or import fails). Keep both CD_ingredients
+and CD_ingredientsJSON on CD_Recipe. The app only reads/writes ingredientsJSON; legacy
+CD_ingredients bytes are ignored unless old clients still use them.
+
+FamilyPerson social fields: CD_hobbies, CD_partnerStatusRaw, CD_isDeceased, CD_deathDate,
+CD_siblings, CD_siblingOf (plus contact fields CD_email, CD_mobile, CD_city,
+CD_cityLatitude, CD_cityLongitude, CD_familyRelationLabel, CD_includeBirthdayOnCalendar)
+must be present in Development and Production before mirroring those attributes.
+Import/deploy PublicSchema.ckdb after shipping this model update if CloudKit logs
+complain about missing fields.
+
+Belongings (InventoryItem) extensions: CD_purchasePlace, CD_locationDetail, CD_productURL,
+CD_insuranceNotes on CD_InventoryItem; new record types CD_InventoryItemLink and
+CD_InventoryItemDocument (PDF/image attachments for receipts, manuals, guarantees).
+Import/deploy PublicSchema.ckdb to Development and Production after this ship.
+
+Family group album: CD_FamilyGroupPhoto (caption, sortOrder, addedAt, imageData) must
+exist in Development and Production. Missing this type stalls Public mirroring when the
+app exports group photos—import/deploy PublicSchema.ckdb after shipping FamilyGroupPhoto.
+
+Recipes tied to places: CD_placeLabel, CD_notes, CD_sortOrder, CD_property on CD_Recipe.
+Import/deploy PublicSchema.ckdb (Development → Deploy to Production) after shipping
+the recipe box so family devices can sync place-linked recipes.
+
+Property maintenance log: new record type CD_PropertyMaintenanceEntry (title, categoryRaw,
+performedAt, nextDueAt, performedBy, costAmount, notes, photoData, property, sortOrder).
+Import/deploy after shipping the maintenance log UI.

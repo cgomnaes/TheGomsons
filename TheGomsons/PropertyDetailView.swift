@@ -15,6 +15,12 @@ struct PropertyDetailView: View {
     @State private var showAddEmergencyLine = false
     @State private var showAddContractor = false
     @State private var showAddServiceProvider = false
+    @State private var showAddInventoryItem = false
+    @State private var inventoryItemToEdit: InventoryItem?
+    @State private var showAddRecipe = false
+    @State private var recipeToEdit: Recipe?
+    @State private var showAddMaintenance = false
+    @State private var maintenanceToEdit: PropertyMaintenanceEntry?
     @State private var photoPickerItem: PhotosPickerItem?
 
     private var sortedContacts: [PropertyContact] {
@@ -130,13 +136,12 @@ struct PropertyDetailView: View {
                 VStack(spacing: 0) {
                     propertyCoverImage
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(property.name.isEmpty ? "Property" : property.name)
+                        TextField("Property name", text: $property.name)
                             .font(.title2.weight(.bold))
-                        if !property.address.isEmpty {
-                            Text(property.address)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
+                        TextField("Address", text: $property.address, axis: .vertical)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1...4)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
@@ -148,108 +153,89 @@ struct PropertyDetailView: View {
             }
 
             Section("Key information") {
-                Picker("Property type", selection: $property.propertyKind) {
-                    ForEach(PropertyKind.allCases, id: \.self) { kind in
+                Picker("Type", selection: $property.propertyKind) {
+                    ForEach(PropertyKind.pickerCases, id: \.self) { kind in
                         Text(kind.displayTitle).tag(kind)
                     }
                 }
                 HStack {
                     Text("Bedrooms")
                     Spacer()
-                    TextField("0", value: $property.bedrooms, format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
+                    IntZeroAsEmptyField(placeholder: "—", value: $property.bedrooms)
                         .frame(maxWidth: 80)
                 }
                 HStack {
                     Text("Bathrooms")
                     Spacer()
-                    TextField("0", value: $property.bathrooms, format: .number)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
+                    DoubleZeroAsEmptyField(placeholder: "—", value: $property.bathrooms)
                         .frame(maxWidth: 80)
-                }
-                HStack {
-                    Text("Living area (sq ft)")
-                    Spacer()
-                    TextField("0", value: $property.livingAreaSqFt, format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 100)
                 }
                 HStack {
                     Text("Year built")
                     Spacer()
-                    TextField("0", value: $property.yearBuilt, format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
+                    IntZeroAsEmptyField(placeholder: "—", value: $property.yearBuilt, maxDigits: 4)
                         .frame(maxWidth: 100)
                 }
-                LabeledContent("Parcel / tax ID") {
-                    TextField("Optional", text: $property.parcelOrTaxId)
-                        .multilineTextAlignment(.trailing)
-                }
-                LabeledContent("Insurance carrier") {
+                LabeledContent("Insurance company") {
                     TextField("Optional", text: $property.insuranceCarrier)
                         .multilineTextAlignment(.trailing)
                 }
-                LabeledContent("Policy number") {
-                    TextField("Optional", text: $property.insurancePolicyNumber)
+            }
+
+            Section("Wi‑Fi") {
+                LabeledContent("Network") {
+                    TextField("SSID", text: $property.wifiNetwork)
                         .multilineTextAlignment(.trailing)
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Utilities & accounts")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("Gas, electric, water, internet account hints…", text: $property.utilitiesNotes, axis: .vertical)
-                        .lineLimit(3 ... 8)
+                LabeledContent("Password") {
+                    SecureField("Password", text: $property.wifiPassword)
+                        .multilineTextAlignment(.trailing)
                 }
             }
 
             Section {
-                Text("Alarm, gate codes, shutoffs, and smart-home notes stay on-device—only share this screen with people you trust.")
+                if sortedEmergencyLines.isEmpty {
+                    Text("Police non-emergency, poison control, building super after hours…")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(sortedEmergencyLines) { line in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(line.label.isEmpty ? "Unlabeled" : line.label)
+                                .font(.headline)
+                            if !line.phoneNumber.isEmpty {
+                                if let url = TelephoneURL.url(for: line.phoneNumber) {
+                                    Link(destination: url) {
+                                        Label(line.phoneNumber, systemImage: "phone.fill")
+                                            .font(.subheadline.monospaced())
+                                    }
+                                } else {
+                                    Text(line.phoneNumber)
+                                        .font(.subheadline.monospaced())
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                modelContext.delete(line)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                Button {
+                    showAddEmergencyLine = true
+                } label: {
+                    Label("Add number", systemImage: "cross.case.fill")
+                }
+                TextField("Medical, egress, breaker panel, gas shutoff…", text: $property.emergencyNotes, axis: .vertical)
+                    .lineLimit(4 ... 12)
+            } header: {
+                Text("Emergency contacts")
+            } footer: {
+                Text("Dialable numbers above; add context here (medical, egress, breaker panel, gas shutoff…).")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Access & home systems") {
-                LabeledContent("Alarm / security code") {
-                    SecureField("Optional", text: $property.alarmOrSecurityCode)
-                        .multilineTextAlignment(.trailing)
-                }
-                LabeledContent("Gate / door code") {
-                    SecureField("Optional", text: $property.gateOrAccessCode)
-                        .multilineTextAlignment(.trailing)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Water shutoff")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("Basement, street valve, unit…", text: $property.waterShutoffLocation, axis: .vertical)
-                        .lineLimit(2 ... 5)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("HVAC & major systems")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("Filter size, last service, warranty…", text: $property.hvacNotes, axis: .vertical)
-                        .lineLimit(2 ... 6)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Trash & recycling")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("Pickup days, cart storage…", text: $property.trashAndRecyclingSchedule, axis: .vertical)
-                        .lineLimit(2 ... 4)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Parking")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("Spots, permits, guest rules…", text: $property.parkingNotes, axis: .vertical)
-                        .lineLimit(2 ... 5)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Smart home")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("Hubs, apps, automations…", text: $property.smartHomeNotes, axis: .vertical)
-                        .lineLimit(2 ... 6)
-                }
             }
 
             Section("Contact people") {
@@ -315,41 +301,44 @@ struct PropertyDetailView: View {
                 }
             }
 
-            Section("Emergency numbers") {
-                if sortedEmergencyLines.isEmpty {
-                    Text("Police non-emergency, poison control, building super after hours…")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(sortedEmergencyLines) { line in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(line.label.isEmpty ? "Unlabeled" : line.label)
-                                .font(.headline)
-                            if !line.phoneNumber.isEmpty {
-                                if let url = TelephoneURL.url(for: line.phoneNumber) {
-                                    Link(destination: url) {
-                                        Label(line.phoneNumber, systemImage: "phone.fill")
-                                            .font(.subheadline.monospaced())
-                                    }
-                                } else {
-                                    Text(line.phoneNumber)
-                                        .font(.subheadline.monospaced())
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                modelContext.delete(line)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                    }
+            Section {
+                Text("Alarm, gate codes, shutoffs, and smart-home notes stay on-device—only share this screen with people you trust.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Other systems") {
+                LabeledContent("Alarm / security code") {
+                    SecureField("Optional", text: $property.alarmOrSecurityCode)
+                        .multilineTextAlignment(.trailing)
                 }
-                Button {
-                    showAddEmergencyLine = true
-                } label: {
-                    Label("Add number", systemImage: "cross.case.fill")
+                LabeledContent("Gate / door code") {
+                    SecureField("Optional", text: $property.gateOrAccessCode)
+                        .multilineTextAlignment(.trailing)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Water shutoff")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("Basement, street valve, unit…", text: $property.waterShutoffLocation, axis: .vertical)
+                        .lineLimit(2 ... 5)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Trash & recycling")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("Pickup days, cart storage…", text: $property.trashAndRecyclingSchedule, axis: .vertical)
+                        .lineLimit(2 ... 4)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Parking")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("Spots, permits, guest rules…", text: $property.parkingNotes, axis: .vertical)
+                        .lineLimit(2 ... 5)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Smart home")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("Hubs, apps, automations…", text: $property.smartHomeNotes, axis: .vertical)
+                        .lineLimit(2 ... 6)
                 }
             }
 
@@ -419,52 +408,162 @@ struct PropertyDetailView: View {
                 Text("Service providers")
             }
 
-            Section("Wi‑Fi") {
-                LabeledContent("Network") {
-                    TextField("SSID", text: $property.wifiNetwork)
+            Section("More details") {
+                HStack {
+                    Text("Living area (m²)")
+                    Spacer()
+                    IntZeroAsEmptyField(placeholder: "—", value: $property.livingAreaSqFt)
+                        .frame(maxWidth: 100)
+                }
+                LabeledContent("Insurance policy #") {
+                    TextField("Optional", text: $property.insurancePolicyNumber)
                         .multilineTextAlignment(.trailing)
                 }
-                LabeledContent("Password") {
-                    SecureField("Password", text: $property.wifiPassword)
-                        .multilineTextAlignment(.trailing)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Utilities & accounts")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("Gas, electric, water, internet account hints…", text: $property.utilitiesNotes, axis: .vertical)
+                        .lineLimit(3 ... 8)
                 }
             }
 
-            Section("On-site emergency notes") {
-                TextField("Medical, egress, breaker panel, gas shutoff…", text: $property.emergencyNotes, axis: .vertical)
-                    .lineLimit(4 ... 12)
-            }
+            Section {
+                Button {
+                    showAddInventoryItem = true
+                } label: {
+                    Label(String(localized: "property.add_belonging"), systemImage: "plus.circle.fill")
+                }
 
-            Section("On-site inventory") {
                 if (property.inventoryItems ?? []).isEmpty {
-                    Text("No items assigned to this property.")
+                    Text(String(localized: "property.belongings_empty"))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach((property.inventoryItems ?? []).sorted(by: { $0.name < $1.name })) { item in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(item.name.isEmpty ? "Untitled item" : item.name)
-                                .font(.headline)
-                            Text(item.category.displayTitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if item.currentRetailPrice > 0 || item.estimatedValue > 0 {
-                                HStack(spacing: 8) {
-                                    if item.currentRetailPrice > 0 {
-                                        Text("List \(item.currentRetailPrice, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))")
-                                            .font(.caption2)
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                    if item.estimatedValue > 0 {
-                                        Text("Est. \(item.estimatedValue, format: .currency(code: Locale.current.currency?.identifier ?? "USD"))")
-                                            .font(.caption2)
-                                            .foregroundStyle(.tertiary)
-                                    }
+                    ForEach(InventoryItem.groupedByStashSection(property.inventoryItems ?? []), id: \.section) { bucket in
+                        Section {
+                            ForEach(bucket.items) { item in
+                                Button {
+                                    inventoryItemToEdit = item
+                                } label: {
+                                    BelongingsItemRow(item: item, showsProperty: false)
                                 }
+                                .buttonStyle(.plain)
                             }
+                        } header: {
+                            Text(bucket.section.title)
                         }
-                        .padding(.vertical, 4)
                     }
                 }
+            } header: {
+                Text(String(localized: "property.belongings_section"))
+            }
+
+            Section {
+                Button {
+                    showAddRecipe = true
+                } label: {
+                    Label(String(localized: "property.add_recipe"), systemImage: "plus.circle.fill")
+                }
+
+                let placeRecipes = Recipe.sorted(property.recipes ?? [])
+                if placeRecipes.isEmpty {
+                    Text(String(localized: "property.recipes_empty"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(placeRecipes) { recipe in
+                        Button {
+                            recipeToEdit = recipe
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(recipe.title.isEmpty ? String(localized: "recipe.untitled") : recipe.title)
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(.primary)
+                                if recipe.prepTimeMinutes > 0 || !recipe.trimmedPlaceLabel.isEmpty {
+                                    HStack(spacing: 6) {
+                                        if !recipe.trimmedPlaceLabel.isEmpty {
+                                            Text(recipe.trimmedPlaceLabel)
+                                        }
+                                        if recipe.prepTimeMinutes > 0 {
+                                            Text("\(recipe.prepTimeMinutes) \(String(localized: "recipe.minutes_short"))")
+                                        }
+                                    }
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                NavigationLink {
+                    RecipesListView(filterProperty: property)
+                } label: {
+                    Label(String(localized: "property.all_recipes"), systemImage: "frying.pan.fill")
+                }
+            } header: {
+                Text(String(localized: "property.recipes_section"))
+            }
+
+            Section {
+                Button {
+                    showAddMaintenance = true
+                } label: {
+                    Label(String(localized: "property.add_maintenance"), systemImage: "plus.circle.fill")
+                }
+
+                let logs = PropertyMaintenanceEntry.sorted(property.maintenanceEntries ?? [])
+                if logs.isEmpty {
+                    Text(String(localized: "property.maintenance_empty"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(logs.prefix(5)) { entry in
+                        Button {
+                            maintenanceToEdit = entry
+                        } label: {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: entry.category.systemImage)
+                                    .foregroundStyle(SimpsonsTheme.brown)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(entry.title.isEmpty ? String(localized: "maintenance.untitled") : entry.title)
+                                        .font(.body.weight(.medium))
+                                        .foregroundStyle(.primary)
+                                    if let days = entry.daysUntilDue() {
+                                        Text(
+                                            days < 0
+                                                ? String(format: String(localized: "maintenance.overdue_days"), locale: .current, abs(days))
+                                                : (days == 0
+                                                    ? String(localized: "maintenance.due_today")
+                                                    : String(format: String(localized: "maintenance.due_in_days"), locale: .current, days))
+                                        )
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(days < 0 ? .red : (days <= 30 ? SimpsonsTheme.orange : .secondary))
+                                    } else if entry.performedAt > Date(timeIntervalSince1970: 0) {
+                                        Text(entry.performedAt.formatted(date: .abbreviated, time: .omitted))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                NavigationLink {
+                    MaintenanceLogListView(filterProperty: property)
+                } label: {
+                    Label(String(localized: "property.all_maintenance"), systemImage: "wrench.and.screwdriver.fill")
+                }
+            } header: {
+                Text(String(localized: "property.maintenance_section"))
             }
         }
         .listStyle(.insetGrouped)
@@ -482,6 +581,42 @@ struct PropertyDetailView: View {
         }
         .sheet(isPresented: $showAddServiceProvider) {
             AddPropertyServiceProviderSheet(property: property)
+        }
+        .sheet(isPresented: $showAddInventoryItem) {
+            NavigationStack {
+                AddInventoryItemView(defaultProperty: property)
+            }
+        }
+        .sheet(item: $inventoryItemToEdit) { item in
+            NavigationStack {
+                AddInventoryItemView(itemToEdit: item)
+            }
+        }
+        .sheet(isPresented: $showAddRecipe) {
+            NavigationStack {
+                RecipeEditorView(defaultProperty: property)
+            }
+        }
+        .sheet(item: $recipeToEdit) { recipe in
+            NavigationStack {
+                RecipeEditorView(recipeToEdit: recipe)
+            }
+        }
+        .sheet(isPresented: $showAddMaintenance) {
+            NavigationStack {
+                MaintenanceEntryEditorView(defaultProperty: property)
+            }
+        }
+        .sheet(item: $maintenanceToEdit) { entry in
+            NavigationStack {
+                MaintenanceEntryEditorView(entryToEdit: entry)
+            }
+        }
+        .task {
+            let normalized = property.propertyKind.normalizedForPicker
+            if normalized != property.propertyKind {
+                property.propertyKind = normalized
+            }
         }
         .onChange(of: photoPickerItem) { _, newItem in
             loadPhoto(from: newItem)
@@ -915,10 +1050,10 @@ struct AddPropertyServiceProviderSheet: View {
                 wifiNetwork: "GomsonsGuest",
                 wifiPassword: "secret",
                 emergencyNotes: "Breaker panel in garage.",
-                propertyKind: PropertyKind.vacation,
+                propertyKind: PropertyKind.cabin,
                 bedrooms: 4,
                 bathrooms: 2.5,
-                livingAreaSqFt: 2200,
+                livingAreaSqFt: 185,
                 yearBuilt: 1998
             )
         )
@@ -931,6 +1066,10 @@ struct AddPropertyServiceProviderSheet: View {
             PropertyContractor.self,
             PropertyServiceProvider.self,
             InventoryItem.self,
+            InventoryItemLink.self,
+            InventoryItemDocument.self,
+            Recipe.self,
+            PropertyMaintenanceEntry.self,
         ],
         inMemory: true
     )
