@@ -1,0 +1,33 @@
+---
+description: Prevent App Store Connect blank icons — require classic AppIcon with ios-marketing 1024 and INCLUDE_ALL_APPICON_ASSETS
+globs: "**/*.{pbxproj,xcassets,appiconset,Contents.json,plist}"
+alwaysApply: false
+---
+
+# iOS App Store icon (ASC blank-icon bug)
+
+App Store Connect / TestFlight often show a **blank app icon** when the catalog only uses the modern single-size `universal` + `platform: ios` 1024 slot (no `ios-marketing` idiom), especially on Xcode / iOS 26.
+
+## Required setup for every iOS app target
+
+1. **`AppIcon.appiconset`** must include an explicit marketing icon:
+   - `idiom`: `ios-marketing`
+   - `size`: `1024x1024`
+   - `scale`: `1x`
+   - PNG, **no alpha**, RGB/sRGB, exactly 1024×1024
+2. Prefer a **classic full icon set** (iPhone + iPad sizes + marketing) over single-size-only.
+3. Do **not** rely on Icon Composer `.icon` alone for store listing icons (known ASC/TestFlight blank-icon issues). Keep a traditional `AppIcon.appiconset` with marketing PNG.
+4. Build settings (Debug + Release):
+   - `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`
+   - `ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES`
+   - `INFOPLIST_KEY_CFBundleIconName = AppIcon`
+5. Avoid filling Dark/Tinted wells with the same opaque color PNG as the only App Store source.
+
+## Verify before archive/upload
+
+```bash
+# Assets.car must list: Idiom marketing, 1024x1024, Opaque true
+xcrun --sdk iphoneos assetutil --info "$APP/Assets.car" | rg -i "marketing|AppIcon|1024"
+```
+
+If marketing is missing, fix the catalog and ship a new build — ASC only refreshes the icon from the uploaded binary.

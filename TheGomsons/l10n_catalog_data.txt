@@ -273,6 +273,31 @@ trip.review.remove_photo|Remove photo|Fjern bilde
 trip.review.photo_a11y|Review photo|Anmeldelsesbilde
 trip.review.slot|Photo|Bilde
 trip.review.photo_missing|Photo unavailable|Bilde utilgjengelig
+trip.plan.title|Plan the trip|Planlegg turen
+trip.plan.subtitle|Ideas for parks, food, and things to do near your stops.|Forslag til parker, mat og aktiviteter nær stoppene deres.
+trip.plan.category.parks|Parks & walks|Parker & turer
+trip.plan.category.restaurants|Restaurants|Restauranter
+trip.plan.category.bars|Bars|Barer
+trip.plan.category.sports|Sports|Sport
+trip.plan.category.activities|Activities|Aktiviteter
+trip.plan.category.concerts|Concerts|Konserter
+trip.plan.category.attractions|Attractions|Attraksjoner
+trip.plan.suggestions_maps|Suggestions from Maps|Forslag fra Kart
+trip.plan.suggestions_gemini|Suggestions from Gemini|Forslag fra Gemini
+trip.plan.pick_category|Pick a category to see suggestions near this trip.|Velg en kategori for å se forslag nær denne turen.
+trip.plan.saved|Saved for this trip|Lagret for denne turen
+trip.plan.loading|Finding ideas…|Henter idéer…
+trip.plan.add|Add to trip|Legg til på turen
+trip.plan.open_maps|Open in Maps|Åpne i Kart
+trip.plan.gemini_key_title|Gemini API key|Gemini API-nøkkel
+trip.plan.gemini_key|API key|API-nøkkel
+trip.plan.gemini_key_footer|Optional. With a key, suggestions use Gemini; otherwise Apple Maps. The key is stored on this device only.|Valgfritt. Med nøkkel brukes Gemini; ellers Apple Kart. Nøkkelen lagres bare på denne enheten.
+trip.plan.gemini_key_clear|Clear key|Fjern nøkkel
+trip.plan.gemini_key.a11y|Gemini API key settings|Innstillinger for Gemini API-nøkkel
+trip.plan.error.destination|Add a destination or cover city on the trip first.|Legg til et reisemål eller en omslagsby på turen først.
+trip.plan.error.response|Couldn’t get suggestions. Try again.|Klarte ikke å hente forslag. Prøv igjen.
+trip.plan.error.http_fmt|Suggestion request failed (HTTP %lld).|Forespørsel om forslag feilet (HTTP %lld).
+trip.plan.error.decode|Couldn’t read the suggestion response.|Klarte ikke å lese forslaget.
 trip.travel_stay|Travel & stay|Reise og opphold
 trip.airline|Airline|Flyselskap
 trip.reference|Reference #|Referanse #

@@ -88,6 +88,17 @@ enum GeminiTripPlanner {
         }
     }
 
+    /// Human-readable language name for Gemini prose (defaults to Norwegian Bokmål for `nb*`).
+    private static var suggestionLanguageName: String {
+        let lang = Locale.current.language.languageCode?.identifier.lowercased() ?? "en"
+        switch lang {
+        case "nb", "nn", "no": return "Norwegian Bokmål"
+        case "en": return "English"
+        default:
+            return Locale.current.localizedString(forLanguageCode: lang)?.capitalized ?? "English"
+        }
+    }
+
     /// Prefer Gemini when a key exists; otherwise MapKit local search near trip places.
     static func suggest(
         category: HolidayPlanCategory,
@@ -136,15 +147,15 @@ enum GeminiTripPlanner {
             throw PlannerError.emptyDestination
         }
 
-        let locale = Locale.current.identifier
+        let languageName = suggestionLanguageName
         let destination = places.isEmpty ? tripName : places.joined(separator: "; ")
         let prompt = """
         You are a concise family trip planner. Suggest 6 concrete \(category.searchPhrase) ideas for: \(destination) (trip: \(tripName)).
         Reply ONLY with a JSON array of objects: [{"title":"…","detail":"…","placeName":"…"}]
-        - title: short place or activity name
-        - detail: one sentence why it fits a family trip
-        - placeName: searchable place name including city
-        Prefer real, well-known options. Language for title/detail: match locale \(locale).
+        - title: short place or activity name (keep real proper names; translate generic titles)
+        - detail: one clear sentence why it fits a family trip, written in \(languageName)
+        - placeName: searchable place name including city (proper names stay as-is)
+        Prefer real, well-known options. All prose (especially detail) MUST be in \(languageName).
         """
 
         let model = "gemini-2.0-flash"
