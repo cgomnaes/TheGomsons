@@ -64,9 +64,9 @@ struct ContentView: View {
                 }
             }
 
-            // On the landing hub, only peek when there is news to bring; in sections, always allowed.
+            // Only peek when there is news — no idle decorative pops.
             CockerSpanielPeekOverlay(
-                isSuppressed: activeSection == nil && cockerNews.isEmpty,
+                isSuppressed: cockerNews.isEmpty,
                 newsItems: cockerNews,
                 onOpenNews: { item in
                     landingAcks.markSeen(item.section)
@@ -119,6 +119,7 @@ struct ContentView: View {
                 HolidayTrip.self,
                 HolidayDestination.self,
                 HolidayTripParticipant.self,
+                HolidayPlanItem.self,
                 VacationIdea.self,
                 HolidayChatMessage.self,
                 FamilyPerson.self,

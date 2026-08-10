@@ -1,4 +1,4 @@
-name,dob,relation,email,mobile,partner_name,partner_status,note,city,hobbies,deceased,death_date
-Ada Gomnaes,1990-05-12,ourHousehold,ada@example.com,+47 900 00 000,Ola Gomnaes,married,,Oslo,"Hiking, cooking",,
-Ola Gomnaes,1988-03-01,ourHousehold,ola@example.com,+47 900 00 001,Ada Gomnaes,married,,Oslo,"Football, photography",,
-Ingrid Berg,1960-11-20,myParentsLine,,+47 400 00 000,,,Mother,Bergen,Gardening,,
+name,preferred_name,dob,relation,email,mobile,partner_name,partner_status,note,city,hobbies,deceased,death_date,sibling_names
+Ada Gomnaes,Ada,1990-05-12,ourHousehold,ada@example.com,+47 900 00 000,Ola Gomnaes,married,,Oslo,"Hiking, cooking",,,
+Ola Gomnaes,,1988-03-01,ourHousehold,ola@example.com,+47 900 00 001,Ada Gomnaes,married,,Oslo,"Football, photography",,,
+Ingrid Berg,Ingrid,1960-11-20,myParentsLine,,+47 400 00 000,,,Mother,Bergen,Gardening,,,

@@ -118,7 +118,7 @@ enum FamilyCalendarNotifications {
         let day = cal.component(.day, from: birthDate)
 
         let content = UNMutableNotificationContent()
-        let name = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = person.displayName
         content.title = "\(name.isEmpty ? "Family member" : name)'s birthday!"
         content.body = "Today is \(name.isEmpty ? "their" : name + "'s") birthday"
         content.sound = .default

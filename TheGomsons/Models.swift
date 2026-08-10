@@ -195,6 +195,19 @@ enum PropertyKind: String, Codable, Sendable {
     }
 }
 
+/// Whether the household owns the place or rents it (orthogonal to `PropertyKind`).
+enum PropertyTenure: String, Codable, CaseIterable, Sendable {
+    case owned
+    case rented
+
+    var displayTitle: String {
+        switch self {
+        case .owned: String(localized: "property.tenure.owned")
+        case .rented: String(localized: "property.tenure.rented")
+        }
+    }
+}
+
 // MARK: - Property contractor / service provider types
 
 enum ContractorTrade: String, Codable, CaseIterable, Sendable {
@@ -297,6 +310,8 @@ final class Property {
 
     // MARK: Key information
     var propertyKind: PropertyKind = PropertyKind.other
+    /// Raw `PropertyTenure.rawValue` (owned / rented).
+    var tenureRaw: String = PropertyTenure.owned.rawValue
     var bedrooms: Int = 0
     var bathrooms: Double = 0
     /// Stored attribute name must stay `livingAreaSqFt` for CloudKit (property renames are not allowed). UI treats values as m².
@@ -305,6 +320,23 @@ final class Property {
     var insuranceCarrier: String = ""
     var insurancePolicyNumber: String = ""
     var utilitiesNotes: String = ""
+
+    // MARK: Rental (when `tenure` is `.rented`)
+    /// Private owner / landlord name when renting.
+    var landlordOrOwnerName: String = ""
+    /// Management company or rental agency (e.g. Utleiemegler).
+    var rentalCompanyName: String = ""
+    var rentalCompanyPhone: String = ""
+    var rentalCompanyEmail: String = ""
+    /// Free-text deposit (e.g. "25 000 kr") so currency stays flexible.
+    var depositAmount: String = ""
+    var monthlyRent: String = ""
+    var leaseStartDate: Date?
+    var leaseEndDate: Date?
+    /// Contract / agreement reference number.
+    var rentalContractReference: String = ""
+    /// Notice period, attachments, parking in lease, etc.
+    var rentalContractNotes: String = ""
 
     // MARK: Other systems (access, utilities-adjacent notes)
     var alarmOrSecurityCode: String = ""
@@ -340,6 +372,13 @@ final class Property {
     @Relationship(deleteRule: .cascade, inverse: \PropertyMaintenanceEntry.property)
     var maintenanceEntries: [PropertyMaintenanceEntry]? = []
 
+    var tenure: PropertyTenure {
+        get { PropertyTenure(rawValue: tenureRaw) ?? .owned }
+        set { tenureRaw = newValue.rawValue }
+    }
+
+    var isRented: Bool { tenure == .rented }
+
     init(
         name: String = "",
         address: String = "",
@@ -348,6 +387,7 @@ final class Property {
         emergencyNotes: String = "",
         coverImageData: Data? = nil,
         propertyKind: PropertyKind = PropertyKind.other,
+        tenure: PropertyTenure = .owned,
         bedrooms: Int = 0,
         bathrooms: Double = 0,
         livingAreaSqFt: Int = 0,
@@ -355,6 +395,16 @@ final class Property {
         insuranceCarrier: String = "",
         insurancePolicyNumber: String = "",
         utilitiesNotes: String = "",
+        landlordOrOwnerName: String = "",
+        rentalCompanyName: String = "",
+        rentalCompanyPhone: String = "",
+        rentalCompanyEmail: String = "",
+        depositAmount: String = "",
+        monthlyRent: String = "",
+        leaseStartDate: Date? = nil,
+        leaseEndDate: Date? = nil,
+        rentalContractReference: String = "",
+        rentalContractNotes: String = "",
         alarmOrSecurityCode: String = "",
         gateOrAccessCode: String = "",
         waterShutoffLocation: String = "",
@@ -372,6 +422,7 @@ final class Property {
         self.emergencyNotes = emergencyNotes
         self.coverImageData = coverImageData
         self.propertyKind = propertyKind
+        self.tenureRaw = tenure.rawValue
         self.bedrooms = bedrooms
         self.bathrooms = bathrooms
         self.livingAreaSqFt = livingAreaSqFt
@@ -379,6 +430,16 @@ final class Property {
         self.insuranceCarrier = insuranceCarrier
         self.insurancePolicyNumber = insurancePolicyNumber
         self.utilitiesNotes = utilitiesNotes
+        self.landlordOrOwnerName = landlordOrOwnerName
+        self.rentalCompanyName = rentalCompanyName
+        self.rentalCompanyPhone = rentalCompanyPhone
+        self.rentalCompanyEmail = rentalCompanyEmail
+        self.depositAmount = depositAmount
+        self.monthlyRent = monthlyRent
+        self.leaseStartDate = leaseStartDate
+        self.leaseEndDate = leaseEndDate
+        self.rentalContractReference = rentalContractReference
+        self.rentalContractNotes = rentalContractNotes
         self.alarmOrSecurityCode = alarmOrSecurityCode
         self.gateOrAccessCode = gateOrAccessCode
         self.waterShutoffLocation = waterShutoffLocation
@@ -1291,6 +1352,8 @@ enum PartnerRelationshipStatus: String, Codable, CaseIterable, Sendable {
 @Model
 final class FamilyPerson {
     var name: String = ""
+    /// Nickname / preferred name shown in the tree and lists when set.
+    var preferredName: String = ""
     var birthDate: Date?
     var notes: String = ""
     /// Email for contact / reference (optional).
@@ -1348,6 +1411,7 @@ final class FamilyPerson {
 
     init(
         name: String = "",
+        preferredName: String = "",
         birthDate: Date? = nil,
         notes: String = "",
         email: String = "",
@@ -1370,6 +1434,7 @@ final class FamilyPerson {
         cityLongitude: Double? = nil
     ) {
         self.name = name
+        self.preferredName = preferredName
         self.birthDate = birthDate
         self.notes = notes
         self.email = email
@@ -1390,6 +1455,24 @@ final class FamilyPerson {
         self.branch = branch
         self.sortOrder = sortOrder
         self.includeBirthdayOnCalendar = includeBirthdayOnCalendar
+    }
+
+    /// Preferred name when set; otherwise the legal/full name. Empty if both are blank.
+    var displayName: String {
+        let preferred = preferredName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !preferred.isEmpty { return preferred }
+        return name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var hasPreferredName: Bool {
+        !preferredName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// First token of `displayName` for compact labels (birthdays strip, partner captions).
+    var displayFirstName: String {
+        let n = displayName
+        guard !n.isEmpty else { return "" }
+        return String(n.split(separator: " ").first ?? Substring(n))
     }
 
     /// Partner link whether stored as `partner` or the inverse `partnerOf`.
@@ -1577,11 +1660,23 @@ final class HolidayTrip {
     var coverLatitude: Double = 0
     var coverLongitude: Double = 0
 
+    /// Post-trip write-up (past trips). Separate from planning `notes`.
+    var reviewText: String = ""
+    @Attribute(.externalStorage)
+    var reviewPhoto1Data: Data?
+    @Attribute(.externalStorage)
+    var reviewPhoto2Data: Data?
+    @Attribute(.externalStorage)
+    var reviewPhoto3Data: Data?
+
     @Relationship(deleteRule: .cascade, inverse: \HolidayDestination.trip)
     var destinations: [HolidayDestination]? = []
 
     @Relationship(deleteRule: .cascade, inverse: \HolidayTripParticipant.trip)
     var participants: [HolidayTripParticipant]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \HolidayPlanItem.trip)
+    var planItems: [HolidayPlanItem]? = []
 
     init(
         tripName: String = "",
@@ -1595,8 +1690,13 @@ final class HolidayTrip {
         coverPlaceName: String = "",
         coverLatitude: Double = 0,
         coverLongitude: Double = 0,
+        reviewText: String = "",
+        reviewPhoto1Data: Data? = nil,
+        reviewPhoto2Data: Data? = nil,
+        reviewPhoto3Data: Data? = nil,
         destinations: [HolidayDestination] = [],
-        participants: [HolidayTripParticipant] = []
+        participants: [HolidayTripParticipant] = [],
+        planItems: [HolidayPlanItem] = []
     ) {
         self.tripName = tripName
         self.startDate = startDate
@@ -1609,13 +1709,49 @@ final class HolidayTrip {
         self.coverPlaceName = coverPlaceName
         self.coverLatitude = coverLatitude
         self.coverLongitude = coverLongitude
+        self.reviewText = reviewText
+        self.reviewPhoto1Data = reviewPhoto1Data
+        self.reviewPhoto2Data = reviewPhoto2Data
+        self.reviewPhoto3Data = reviewPhoto3Data
         self.destinations = destinations
         self.participants = participants
+        self.planItems = planItems
     }
 
     /// True when the trip’s last calendar day is before today (fully completed).
     var isPastTrip: Bool {
         Calendar.current.startOfDay(for: endDate) < Calendar.current.startOfDay(for: Date())
+    }
+
+    /// Up to three review photo slots (nil = empty).
+    var reviewPhotoSlots: [Data?] {
+        [reviewPhoto1Data, reviewPhoto2Data, reviewPhoto3Data]
+    }
+
+    func reviewPhotoData(at index: Int) -> Data? {
+        switch index {
+        case 0: reviewPhoto1Data
+        case 1: reviewPhoto2Data
+        case 2: reviewPhoto3Data
+        default: nil
+        }
+    }
+
+    func setReviewPhotoData(_ data: Data?, at index: Int) {
+        switch index {
+        case 0: reviewPhoto1Data = data
+        case 1: reviewPhoto2Data = data
+        case 2: reviewPhoto3Data = data
+        default: break
+        }
+    }
+
+    /// First empty slot index, or `nil` when all three are filled.
+    var firstEmptyReviewPhotoSlot: Int? {
+        for index in 0..<3 where reviewPhotoData(at: index) == nil {
+            return index
+        }
+        return nil
     }
 }
 
@@ -1668,6 +1804,104 @@ final class HolidayDestination {
         self.arrivalDate = arrivalDate
         self.departureDate = departureDate
         self.activities = activities
+        self.trip = trip
+    }
+}
+
+/// Quick-pick categories for trip activity / restaurant planning.
+enum HolidayPlanCategory: String, Codable, CaseIterable, Identifiable, Sendable {
+    case parksWalks
+    case restaurants
+    case bars
+    case sports
+    case activities
+    case concerts
+    case attractions
+
+    var id: String { rawValue }
+
+    var displayTitle: String {
+        switch self {
+        case .parksWalks: String(localized: "trip.plan.category.parks")
+        case .restaurants: String(localized: "trip.plan.category.restaurants")
+        case .bars: String(localized: "trip.plan.category.bars")
+        case .sports: String(localized: "trip.plan.category.sports")
+        case .activities: String(localized: "trip.plan.category.activities")
+        case .concerts: String(localized: "trip.plan.category.concerts")
+        case .attractions: String(localized: "trip.plan.category.attractions")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .parksWalks: "figure.walk"
+        case .restaurants: "fork.knife"
+        case .bars: "wineglass.fill"
+        case .sports: "sportscourt.fill"
+        case .activities: "sparkles"
+        case .concerts: "music.mic"
+        case .attractions: "building.columns.fill"
+        }
+    }
+
+    /// Natural-language query fragment for MapKit / Gemini.
+    var searchPhrase: String {
+        switch self {
+        case .parksWalks: "parks walks nature trails"
+        case .restaurants: "restaurants"
+        case .bars: "bars cocktail wine"
+        case .sports: "sports stadiums activities"
+        case .activities: "family activities experiences"
+        case .concerts: "concerts live music venues"
+        case .attractions: "attractions museums landmarks"
+        }
+    }
+}
+
+/// A saved planning pick for an upcoming trip (restaurant, park, concert, …).
+@Model
+final class HolidayPlanItem {
+    var title: String = ""
+    var detail: String = ""
+    var categoryRaw: String = HolidayPlanCategory.activities.rawValue
+    var placeName: String = ""
+    var mapsQuery: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var sortOrder: Int = 0
+    var sourceRaw: String = "manual"
+    var createdAt: Date = Date()
+
+    var trip: HolidayTrip?
+
+    var category: HolidayPlanCategory {
+        get { HolidayPlanCategory(rawValue: categoryRaw) ?? .activities }
+        set { categoryRaw = newValue.rawValue }
+    }
+
+    init(
+        title: String = "",
+        detail: String = "",
+        category: HolidayPlanCategory = .activities,
+        placeName: String = "",
+        mapsQuery: String = "",
+        latitude: Double = 0,
+        longitude: Double = 0,
+        sortOrder: Int = 0,
+        sourceRaw: String = "manual",
+        createdAt: Date = Date(),
+        trip: HolidayTrip? = nil
+    ) {
+        self.title = title
+        self.detail = detail
+        self.categoryRaw = category.rawValue
+        self.placeName = placeName
+        self.mapsQuery = mapsQuery
+        self.latitude = latitude
+        self.longitude = longitude
+        self.sortOrder = sortOrder
+        self.sourceRaw = sourceRaw
+        self.createdAt = createdAt
         self.trip = trip
     }
 }

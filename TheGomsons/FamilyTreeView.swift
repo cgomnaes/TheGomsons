@@ -18,6 +18,12 @@ struct FamilyTreeView: View {
     @State private var searchText = ""
     @State private var mode: TreeDisplayMode = .tree
     @State private var selectedPerson: FamilyPerson?
+    /// Person currently at the center of the ego-centric tree.
+    @State private var focusPerson: FamilyPerson?
+    /// Selected “me” person name (relationship labels are relative to them).
+    @State private var mePersonName: String? = FamilyTreeHomePersonStore.mePersonName
+    @State private var generationDepth: Int = FamilyTreeHomePersonStore.generationDepth
+    @State private var showPickMe = false
     @State private var showAddPerson = false
     @State private var showFamilyCSVImport = false
     @State private var familyImportAlert: String?
@@ -86,8 +92,34 @@ struct FamilyTreeView: View {
         return u.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    private var treeForest: [FamilyTreeNode] {
-        FamilyTreeHierarchyBuilder.buildForest(from: treeUniverse)
+    private var resolvedFocus: FamilyPerson? {
+        if let focusPerson,
+           treeUniverse.contains(where: { $0.persistentModelID == focusPerson.persistentModelID }) {
+            return focusPerson
+        }
+        return FamilyTreeHierarchyBuilder.defaultFocus(
+            in: treeUniverse,
+            preferredHomeName: mePersonName
+        )
+    }
+
+    /// Resolved “me” for kinship labels (may be outside current branch filter — use allPeople).
+    private var mePerson: FamilyPerson? {
+        guard let mePersonName else { return nil }
+        let key = mePersonName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return allPeople.first {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key
+        }
+    }
+
+    private var egoGraph: FamilyEgoGraph? {
+        guard let focus = resolvedFocus else { return nil }
+        return FamilyTreeHierarchyBuilder.buildEgoGraph(
+            focus: focus,
+            universe: treeUniverse,
+            ancestorGenerations: generationDepth,
+            descendantGenerations: generationDepth
+        )
     }
 
     /// Next upcoming birthdays for the social strip (prefer calendar-included; fall back to all).
@@ -143,6 +175,10 @@ struct FamilyTreeView: View {
                         .padding(.horizontal)
                         .padding(.vertical, 6)
 
+                        if mode == .tree {
+                            treeFocusControls
+                        }
+
                         switch mode {
                         case .tree:
                             treeScroll
@@ -162,6 +198,16 @@ struct FamilyTreeView: View {
             .navigationTitle(String(localized: "family_tree.title"))
             .onAppear {
                 FamilyCalendarNotifications.rescheduleAllPersonBirthdays(allPeople)
+                syncFocusIfNeeded()
+            }
+            .onChange(of: allPeople.count) { _, _ in
+                syncFocusIfNeeded()
+            }
+            .onChange(of: branchFilter) { _, _ in
+                syncFocusIfNeeded()
+            }
+            .onChange(of: searchText) { _, _ in
+                syncFocusIfNeeded()
             }
             .searchable(text: $searchText, prompt: String(localized: "family_tree.search_prompt"))
             .toolbar {
@@ -241,26 +287,171 @@ struct FamilyTreeView: View {
                         onSelectRelated: { related in
                             selectedPerson = related
                         },
-                        onDeleted: { selectedPerson = nil }
+                        onCenterInTree: { related in
+                            selectedPerson = nil
+                            mode = .tree
+                            withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
+                                focusPerson = related
+                            }
+                        },
+                        onSetMe: { person in
+                            FamilyTreeHomePersonStore.setMe(person)
+                            mePersonName = FamilyTreeHomePersonStore.mePersonName
+                        },
+                        onDeleted: {
+                            selectedPerson = nil
+                            mePersonName = FamilyTreeHomePersonStore.mePersonName
+                        }
                     )
                 }
             }
         }
     }
 
+    private var treeFocusControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Button {
+                    showPickMe = true
+                } label: {
+                    Label(
+                        mePerson.map { "Me: \($0.displayName.isEmpty ? $0.name : $0.displayName)" } ?? "Who am I?",
+                        systemImage: "person.fill.checkmark"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(mePerson == nil ? SimpsonsTheme.orange : SimpsonsTheme.blue)
+                .controlSize(.small)
+
+                Button {
+                    goToMePerson()
+                } label: {
+                    Label("Center on me", systemImage: "scope")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(mePerson == nil)
+
+                Spacer(minLength: 4)
+
+                Text("Gens")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Generations", selection: $generationDepth) {
+                    Text("1").tag(1)
+                    Text("2").tag(2)
+                    Text("3").tag(3)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 120)
+                .onChange(of: generationDepth) { _, newValue in
+                    FamilyTreeHomePersonStore.generationDepth = newValue
+                }
+            }
+
+            if mePerson == nil {
+                Text("Choose yourself so others are labeled Uncle, Grandmother, Cousin, …")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 6)
+        .sheet(isPresented: $showPickMe) {
+            NavigationStack {
+                List {
+                    Section {
+                        Text("Relationship labels (Uncle, Grandfather, …) are shown relative to the person you pick.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Section("I am…") {
+                        ForEach(allPeople.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }, id: \.persistentModelID) { person in
+                            Button {
+                                FamilyTreeHomePersonStore.setMe(person)
+                                mePersonName = FamilyTreeHomePersonStore.mePersonName
+                                withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
+                                    focusPerson = person
+                                }
+                                showPickMe = false
+                            } label: {
+                                HStack {
+                                    FamilyPersonAvatar(photoData: person.photoData, name: person.displayName)
+                                        .frame(width: 36, height: 36)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(person.displayName.isEmpty ? String(localized: "common.unnamed") : person.displayName)
+                                            .foregroundStyle(.primary)
+                                        if person.hasPreferredName, !person.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            Text(person.name)
+                                                .font(.caption2)
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        Text(person.branch.displayTitle)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if isMeName(person.name) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(SimpsonsTheme.blue)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Who am I?")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { showPickMe = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    private func isMeName(_ name: String) -> Bool {
+        guard let mePersonName else { return false }
+        return name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare(mePersonName) == .orderedSame
+    }
+
     private var treeScroll: some View {
         Group {
-            if treeForest.isEmpty {
+            if let egoGraph {
+                FamilyEgoTreeView(
+                    graph: egoGraph,
+                    universe: treeUniverse,
+                    mePerson: mePerson,
+                    onFocus: { person in
+                        withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
+                            focusPerson = person
+                        }
+                    },
+                    onShowProfile: { person in
+                        selectedPerson = person
+                    },
+                    onSetMe: { person in
+                        FamilyTreeHomePersonStore.setMe(person)
+                        mePersonName = FamilyTreeHomePersonStore.mePersonName
+                        withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
+                            focusPerson = person
+                        }
+                    },
+                    mePersonName: mePersonName
+                )
+            } else {
                 ContentUnavailableView(
                     String(localized: "family_tree.no_matches"),
                     systemImage: "line.3.horizontal.decrease.circle",
                     description: Text(String(localized: "family_tree.try_branch"))
                 )
                 .frame(minHeight: 200)
-            } else {
-                FamilyTreeHierarchyView(nodes: treeForest) { person in
-                    selectedPerson = person
-                }
             }
         }
     }
@@ -279,11 +470,53 @@ struct FamilyTreeView: View {
                         Button {
                             selectedPerson = person
                         } label: {
-                            FamilyPersonRow(person: person, allPeople: allPeople)
+                            FamilyPersonRow(person: person, allPeople: allPeople, mePerson: mePerson)
+                        }
+                        .contextMenu {
+                            Button {
+                                mode = .tree
+                                withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
+                                    focusPerson = person
+                                }
+                            } label: {
+                                Label("Center in tree", systemImage: "scope")
+                            }
+                            Button {
+                                FamilyTreeHomePersonStore.setMe(person)
+                                mePersonName = FamilyTreeHomePersonStore.mePersonName
+                            } label: {
+                                Label("This is me", systemImage: "person.fill.checkmark")
+                            }
                         }
                     }
                 }
                 .listStyle(.insetGrouped)
+            }
+        }
+    }
+
+    private func syncFocusIfNeeded() {
+        if let focusPerson,
+           treeUniverse.contains(where: { $0.persistentModelID == focusPerson.persistentModelID }) {
+            return
+        }
+        focusPerson = FamilyTreeHierarchyBuilder.defaultFocus(
+            in: treeUniverse,
+            preferredHomeName: mePersonName
+        )
+    }
+
+    private func goToMePerson() {
+        if let me = mePerson {
+            withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
+                focusPerson = me
+            }
+        } else if let home = FamilyTreeHierarchyBuilder.defaultFocus(
+            in: treeUniverse,
+            preferredHomeName: mePersonName
+        ) {
+            withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
+                focusPerson = home
             }
         }
     }
@@ -348,9 +581,9 @@ private struct UpcomingBirthdaysStrip: View {
                             onSelect(item.person)
                         } label: {
                             VStack(spacing: 6) {
-                                FamilyPersonAvatar(photoData: item.person.photoData, name: item.person.name)
+                                FamilyPersonAvatar(photoData: item.person.photoData, name: item.person.displayName)
                                     .frame(width: 52, height: 52)
-                                Text(firstName(item.person.name))
+                                Text(item.person.displayFirstName.isEmpty ? String(localized: "common.unnamed") : item.person.displayFirstName)
                                     .font(.caption.weight(.semibold))
                                     .lineLimit(1)
                                     .frame(maxWidth: 72)
@@ -376,12 +609,6 @@ private struct UpcomingBirthdaysStrip: View {
         .background(Color(.systemGroupedBackground))
     }
 
-    private func firstName(_ name: String) -> String {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return String(localized: "common.unnamed") }
-        return String(trimmed.split(separator: " ").first ?? Substring(trimmed))
-    }
-
     private func daysLabel(_ days: Int, date: Date) -> String {
         if days == 0 {
             return String(localized: "family_tree.birthday_today")
@@ -401,18 +628,29 @@ private struct UpcomingBirthdaysStrip: View {
 private struct FamilyPersonRow: View {
     let person: FamilyPerson
     let allPeople: [FamilyPerson]
+    var mePerson: FamilyPerson?
 
     var body: some View {
         HStack(spacing: 12) {
-            FamilyPersonAvatar(photoData: person.photoData, name: person.name)
+            FamilyPersonAvatar(photoData: person.photoData, name: person.displayName)
                 .frame(width: 44, height: 44)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(person.name.isEmpty ? String(localized: "common.untitled") : person.name)
+                    Text(person.displayName.isEmpty ? String(localized: "common.untitled") : person.displayName)
                         .font(.headline)
                     if person.isDeceased {
                         DeceasedCrossMark(font: .headline)
                     }
+                }
+                if person.hasPreferredName, !person.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(person.name)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                if let mePerson {
+                    Text(FamilyKinship.label(of: person, relativeTo: mePerson, among: allPeople))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(SimpsonsTheme.blue.opacity(0.85))
                 }
                 HStack(spacing: 8) {
                     if let d = person.birthDate {
@@ -436,9 +674,9 @@ private struct FamilyPersonRow: View {
                             )
                         )
                 }
-                if let p = person.resolvedPartner, !p.name.isEmpty {
+                if let p = person.resolvedPartner, !p.displayName.isEmpty {
                     HStack(spacing: 4) {
-                        Text(String(format: String(localized: "family_tree.partner"), locale: .current, p.name))
+                        Text(String(format: String(localized: "family_tree.partner"), locale: .current, p.displayName))
                         if let status = person.displayPartnerStatus {
                             Text("·")
                             Text(status.displayTitle)
@@ -453,7 +691,7 @@ private struct FamilyPersonRow: View {
                         String(
                             format: String(localized: "family_tree.siblings_fmt"),
                             locale: .current,
-                            siblings.prefix(3).map { $0.name.isEmpty ? String(localized: "common.unnamed") : $0.name }.joined(separator: ", ")
+                            siblings.prefix(3).map { $0.displayName.isEmpty ? String(localized: "common.unnamed") : $0.displayName }.joined(separator: ", ")
                         )
                     )
                     .font(.caption2)
@@ -517,16 +755,23 @@ private struct FamilyPersonProfileView: View {
     let person: FamilyPerson
     var onDone: () -> Void
     var onSelectRelated: (FamilyPerson) -> Void
+    var onCenterInTree: (FamilyPerson) -> Void
+    var onSetMe: (FamilyPerson) -> Void
     var onDeleted: () -> Void
 
     @State private var showEditor = false
 
-    private var displayName: String {
-        person.name.isEmpty ? String(localized: "common.unnamed") : person.name
+    private var titleName: String {
+        let shown = person.displayName
+        return shown.isEmpty ? String(localized: "common.unnamed") : shown
     }
 
     private var siblings: [FamilyPerson] {
         person.resolvedSiblings(among: allPeople)
+    }
+
+    private var children: [FamilyPerson] {
+        FamilyTreeHierarchyBuilder.mergedChildren(for: person, in: allPeople)
     }
 
     private var otherPeople: [FamilyPerson] {
@@ -537,11 +782,17 @@ private struct FamilyPersonProfileView: View {
         List {
             Section {
                 VStack(spacing: 12) {
-                    FamilyPersonAvatar(photoData: person.photoData, name: person.name)
+                    FamilyPersonAvatar(photoData: person.photoData, name: person.displayName)
                         .frame(width: 128, height: 128)
-                    Text(displayName)
+                    Text(titleName)
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
+                    if person.hasPreferredName, !person.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(person.name)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                     if person.isDeceased {
                         DeceasedCrossMark(font: .title3.weight(.semibold))
                     }
@@ -561,6 +812,30 @@ private struct FamilyPersonProfileView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .listRowBackground(Color.clear)
+            }
+
+            Section {
+                Button {
+                    onCenterInTree(person)
+                } label: {
+                    Label("Center in family tree", systemImage: "scope")
+                }
+                Button {
+                    onSetMe(person)
+                } label: {
+                    Label("This is me", systemImage: "person.fill.checkmark")
+                }
+            }
+
+            if person.mother != nil || person.father != nil {
+                Section("Parents") {
+                    if let mother = person.mother {
+                        relatedPersonButton(mother, subtitle: "Mother")
+                    }
+                    if let father = person.father {
+                        relatedPersonButton(father, subtitle: "Father")
+                    }
+                }
             }
 
             if person.birthDate != nil || person.isDeceased {
@@ -604,54 +879,27 @@ private struct FamilyPersonProfileView: View {
 
             if let partner = person.resolvedPartner {
                 Section(String(localized: "family_tree.profile_partner")) {
-                    Button {
-                        onSelectRelated(partner)
-                    } label: {
-                        HStack(spacing: 12) {
-                            FamilyPersonAvatar(photoData: partner.photoData, name: partner.name)
-                                .frame(width: 40, height: 40)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(partner.name.isEmpty ? String(localized: "common.unnamed") : partner.name)
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                if let status = person.displayPartnerStatus {
-                                    Text(status.displayTitle)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
+                    relatedPersonButton(partner, subtitle: person.displayPartnerStatus?.displayTitle)
                 }
             }
 
             if !siblings.isEmpty {
                 Section(String(localized: "family_tree.siblings")) {
                     ForEach(siblings, id: \.persistentModelID) { sibling in
-                        Button {
-                            onSelectRelated(sibling)
-                        } label: {
-                            HStack(spacing: 12) {
-                                FamilyPersonAvatar(photoData: sibling.photoData, name: sibling.name)
-                                    .frame(width: 40, height: 40)
-                                Text(sibling.name.isEmpty ? String(localized: "common.unnamed") : sibling.name)
-                                    .font(.body.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                if person.sharesParent(with: sibling) {
-                                    Text(String(localized: "family_tree.sibling_via_parents"))
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
+                        relatedPersonButton(
+                            sibling,
+                            subtitle: person.sharesParent(with: sibling)
+                                ? String(localized: "family_tree.sibling_via_parents")
+                                : nil
+                        )
+                    }
+                }
+            }
+
+            if !children.isEmpty {
+                Section("Children") {
+                    ForEach(children, id: \.persistentModelID) { child in
+                        relatedPersonButton(child, subtitle: nil)
                     }
                 }
             }
@@ -727,6 +975,39 @@ private struct FamilyPersonProfileView: View {
         }
     }
 
+    @ViewBuilder
+    private func relatedPersonButton(_ related: FamilyPerson, subtitle: String?) -> some View {
+        Button {
+            onSelectRelated(related)
+        } label: {
+            HStack(spacing: 12) {
+                FamilyPersonAvatar(photoData: related.photoData, name: related.displayName)
+                    .frame(width: 40, height: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(related.displayName.isEmpty ? String(localized: "common.unnamed") : related.displayName)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .contextMenu {
+            Button {
+                onCenterInTree(related)
+            } label: {
+                Label("Center in tree", systemImage: "scope")
+            }
+        }
+    }
+
     private var hasContactContent: Bool {
         !person.mobile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !person.email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -787,6 +1068,7 @@ private struct FamilyPersonEditorView: View {
     var onDeleted: (() -> Void)? = nil
 
     @State private var draftName = ""
+    @State private var draftPreferredName = ""
     @State private var draftBirth: Date = Date()
     @State private var hasBirth = false
     @State private var draftIncludeBirthdayOnCalendar = true
@@ -808,8 +1090,18 @@ private struct FamilyPersonEditorView: View {
     @State private var selectedSiblingIDs: Set<PersistentIdentifier> = []
     @State private var photoItem: PhotosPickerItem?
     @State private var photoData: Data?
+    @State private var confirmDeletePerson = false
 
     private var isNew: Bool { person == nil }
+
+    private var deleteConfirmTitle: String {
+        let fromPerson = person?.displayName.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let label = fromPerson.isEmpty
+            ? draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+            : fromPerson
+        let name = label.isEmpty ? String(localized: "common.unnamed") : label
+        return String(format: String(localized: "family_tree.delete_person_confirm_title"), locale: .current, name)
+    }
 
     var body: some View {
         Form {
@@ -860,8 +1152,11 @@ private struct FamilyPersonEditorView: View {
                 Text(String(localized: "family_tree.photo_footer"))
             }
 
-            Section(String(localized: "family_tree.profile_section")) {
+            Section {
                 TextField(String(localized: "common.name"), text: $draftName)
+                    .textContentType(.name)
+                TextField(String(localized: "family_tree.preferred_name"), text: $draftPreferredName)
+                    .textContentType(.nickname)
                 Toggle(String(localized: "family_tree.birthday_toggle"), isOn: $hasBirth)
                 if hasBirth {
                     DatePicker(String(localized: "event.kind.birthday"), selection: $draftBirth, displayedComponents: .date)
@@ -876,6 +1171,10 @@ private struct FamilyPersonEditorView: View {
                         DatePicker(String(localized: "family_tree.death_date"), selection: $draftDeath, displayedComponents: .date)
                     }
                 }
+            } header: {
+                Text(String(localized: "family_tree.profile_section"))
+            } footer: {
+                Text(String(localized: "family_tree.preferred_name_footer"))
             }
 
             Section {
@@ -903,19 +1202,19 @@ private struct FamilyPersonEditorView: View {
                 Picker(String(localized: "family_tree.mother"), selection: $mother) {
                     Text("—").tag(nil as FamilyPerson?)
                     ForEach(allPeople, id: \.persistentModelID) { p in
-                        Text(p.name.isEmpty ? String(localized: "common.unnamed") : p.name).tag(p as FamilyPerson?)
+                        Text(p.displayName.isEmpty ? String(localized: "common.unnamed") : p.displayName).tag(p as FamilyPerson?)
                     }
                 }
                 Picker(String(localized: "family_tree.father"), selection: $father) {
                     Text("—").tag(nil as FamilyPerson?)
                     ForEach(allPeople, id: \.persistentModelID) { p in
-                        Text(p.name.isEmpty ? String(localized: "common.unnamed") : p.name).tag(p as FamilyPerson?)
+                        Text(p.displayName.isEmpty ? String(localized: "common.unnamed") : p.displayName).tag(p as FamilyPerson?)
                     }
                 }
                 Picker(String(localized: "family_tree.partner_picker"), selection: $partner) {
                     Text("—").tag(nil as FamilyPerson?)
                     ForEach(allPeople, id: \.persistentModelID) { p in
-                        Text(p.name.isEmpty ? String(localized: "common.unnamed") : p.name).tag(p as FamilyPerson?)
+                        Text(p.displayName.isEmpty ? String(localized: "common.unnamed") : p.displayName).tag(p as FamilyPerson?)
                     }
                 }
                 if partner != nil {
@@ -936,7 +1235,7 @@ private struct FamilyPersonEditorView: View {
                         let parentDerived = isParentDerivedSibling(p)
                         Toggle(isOn: siblingToggleBinding(for: p, parentDerived: parentDerived)) {
                             HStack {
-                                Text(p.name.isEmpty ? String(localized: "common.unnamed") : p.name)
+                                Text(p.displayName.isEmpty ? String(localized: "common.unnamed") : p.displayName)
                                 if parentDerived {
                                     Text(String(localized: "family_tree.sibling_via_parents"))
                                         .font(.caption2)
@@ -980,23 +1279,12 @@ private struct FamilyPersonEditorView: View {
             if !isNew {
                 Section {
                     Button(role: .destructive) {
-                        if let person {
-                            FamilyCalendarNotifications.cancelPersonBirthday(person)
-                            modelContext.delete(person)
-                            do {
-                                try modelContext.save()
-                            } catch {
-                                print("[TheGomsons] Failed to delete family person: \(error.localizedDescription)")
-                            }
-                        }
-                        if let onDeleted {
-                            onDeleted()
-                        } else {
-                            onCancel()
-                        }
+                        confirmDeletePerson = true
                     } label: {
                         Text(String(localized: "family_tree.delete_person"))
                     }
+                } footer: {
+                    Text(String(localized: "family_tree.delete_person_footer"))
                 }
             }
         }
@@ -1013,6 +1301,18 @@ private struct FamilyPersonEditorView: View {
                 .fontWeight(.semibold)
             }
         }
+        .confirmationDialog(
+            deleteConfirmTitle,
+            isPresented: $confirmDeletePerson,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "family_tree.delete_person_confirm_action"), role: .destructive) {
+                performDelete()
+            }
+            Button(String(localized: "common.cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "family_tree.delete_person_confirm_msg"))
+        }
         .onAppear {
             guard let person else {
                 draftTier = 2
@@ -1020,6 +1320,7 @@ private struct FamilyPersonEditorView: View {
                 return
             }
             draftName = person.name
+            draftPreferredName = person.preferredName
             draftNotes = person.notes
             draftEmail = person.email
             draftMobile = person.mobile
@@ -1044,6 +1345,47 @@ private struct FamilyPersonEditorView: View {
             partner = person.partner ?? person.partnerOf
             draftPartnerStatus = person.partnerStatus ?? .partner
             selectedSiblingIDs = Set(person.explicitSiblings.map(\.persistentModelID))
+        }
+    }
+
+    private func performDelete() {
+        guard let person else { return }
+
+        FamilyCalendarNotifications.cancelPersonBirthday(person)
+
+        let legalName = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let meName = FamilyTreeHomePersonStore.mePersonName,
+           !legalName.isEmpty,
+           legalName.caseInsensitiveCompare(meName) == .orderedSame {
+            FamilyTreeHomePersonStore.mePersonName = nil
+        }
+
+        clearPartnerLinks(for: person)
+        person.partnerStatus = nil
+
+        for child in person.childrenWhereMother ?? [] {
+            child.mother = nil
+        }
+        for child in person.childrenWhereFather ?? [] {
+            child.father = nil
+        }
+
+        clearExplicitSiblingLinks(for: person)
+
+        person.mother = nil
+        person.father = nil
+
+        modelContext.delete(person)
+        do {
+            try modelContext.save()
+        } catch {
+            print("[TheGomsons] Failed to delete family person: \(error.localizedDescription)")
+        }
+
+        if let onDeleted {
+            onDeleted()
+        } else {
+            onCancel()
         }
     }
 
@@ -1079,6 +1421,7 @@ private struct FamilyPersonEditorView: View {
         }
 
         target.name = draftName
+        target.preferredName = draftPreferredName.trimmingCharacters(in: .whitespacesAndNewlines)
         target.notes = draftNotes
         target.email = draftEmail.trimmingCharacters(in: .whitespacesAndNewlines)
         target.mobile = draftMobile.trimmingCharacters(in: .whitespacesAndNewlines)

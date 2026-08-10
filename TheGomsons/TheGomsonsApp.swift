@@ -23,6 +23,7 @@ struct TheGomsonsApp: App {
 /// Waits for the CloudKit-backed store to load before attaching SwiftData; see `CloudDataManager`.
 private struct TheGomsonsRootView: View {
     @EnvironmentObject private var cloud: CloudDataManager
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -31,8 +32,24 @@ private struct TheGomsonsRootView: View {
                 // CloudKit import and kicked users back to the landing screen.
                 ContentView()
                     .modelContainer(container)
+            } else if let message = cloud.storeLoadErrorMessage {
+                ContentUnavailableView {
+                    Label(String(localized: "sync.store_error_title"), systemImage: "externaldrive.badge.exclamationmark")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button(String(localized: "sync.reload_local")) {
+                        cloud.refreshFamilyDataFromStore()
+                    }
+                }
             } else {
                 ProgressView(String(localized: "common.loading"))
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Safe dual-stack reopen: only when UI is not mid-interaction.
+            if phase == .background {
+                cloud.applyDeferredSwiftDataReloadIfNeeded()
             }
         }
     }

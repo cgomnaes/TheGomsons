@@ -43,6 +43,11 @@
 //  4. Save, **Deploy Schema** for Production when shipping.
 //
 //  Other console noise (not fixable in app code):
+//  • Simulator without iCloud signed in → `Not Authenticated` (9), `Account Temporarily Unavailable` (36),
+//    “CloudKit setup failed”. Local SQLite still works; sync needs Settings → Apple Account on the Simulator
+//    (or a device). These are **not** app crashes.
+//  • `hapticpatternlibrary.plist` / `_dictationButton` / keyboard constraint conflicts — Simulator/UIKit noise.
+//  • Wikipedia / MapKit TLS or missing `satellite.styl` — network MITM or MapKit asset gaps in Simulator.
 //  • `NSKeyedUnarchiveFromData` / deprecation — comes from **Core Data / system frameworks** (not your Swift);
 //    Apple may silence it in a future OS. Ignore unless you see data corruption alongside it.
 //  • `updateTaskRequest` / `com.apple.coredata.cloudkit.activity.export` / `BGSystemTaskSchedulerErrorDomain` —
@@ -136,8 +141,9 @@ import _SwiftData_CoreData
 ///
 /// **Dual stack:** CloudKit mirroring uses `NSPersistentCloudKitContainer`; the UI uses
 /// SwiftData on the **same store URL** with `cloudKitDatabase: .none`. After a successful
-/// CloudKit **import**, SwiftData’s coordinator can stay stale—so we rebuild the
-/// `ModelContainer` (debounced) so `@Query` picks up other users’ rows.
+/// CloudKit **import**, SwiftData’s coordinator can stay stale. Rebuilding `ModelContainer`
+/// while views still hold the old `ModelContext` crashes—so we **defer** reopen until the
+/// app is backgrounded (or the user taps Reload), and tear the UI down first (`modelContainer = nil`).
 @MainActor
 final class CloudDataManager: ObservableObject {
     static let shared = CloudDataManager()
@@ -145,7 +151,6 @@ final class CloudDataManager: ObservableObject {
     /// Merges SwiftData’s underlying `NSManagedObjectContext` saves into the CloudKit stack’s `viewContext`.
     private var siblingContextSaveObserver: NSObjectProtocol?
     private var cloudKitEventObserver: NSObjectProtocol?
-    private var swiftDataReloadTask: Task<Void, Never>?
     private var isReloadingSwiftData = false
 
     static let cloudKitContainerIdentifier = "iCloud.com.gomnaes.TheGomsons"
@@ -181,6 +186,7 @@ final class CloudDataManager: ObservableObject {
             HolidayTrip.self,
             HolidayDestination.self,
             HolidayTripParticipant.self,
+            HolidayPlanItem.self,
             VacationIdea.self,
             HolidayChatMessage.self,
             PropertyContractor.self,
@@ -194,8 +200,14 @@ final class CloudDataManager: ObservableObject {
     /// Set only after `NSPersistentCloudKitContainer` finishes loading the store. Opening SwiftData on the same file before that breaks CloudKit export/import.
     @Published private(set) var modelContainer: ModelContainer?
 
-    /// Bumped when SwiftData is reopened after a CloudKit import (views can `.id` this if needed).
+    /// Bumped when SwiftData is reopened (after a deferred/manual reload).
     @Published private(set) var swiftDataStoreEpoch = 0
+
+    /// True when CloudKit imported rows that SwiftData may not show until the next safe reload.
+    @Published private(set) var pendingDeferredSwiftDataReload = false
+
+    /// Non-nil when the local store failed to open (avoids `fatalError` so the UI can explain).
+    @Published private(set) var storeLoadErrorMessage: String?
 
     /// Latest iCloud account status for the app’s CloudKit container (`nil` until first query finishes).
     @Published private(set) var cloudKitAccountStatus: CKAccountStatus?
@@ -210,6 +222,11 @@ final class CloudDataManager: ObservableObject {
     /// Shown in Data backup → Family sync. Explains shared intent and “siloed” troubleshooting.
     static var sharedFamilyDataFootnote: String {
         String(localized: "sync.family_footnote")
+    }
+
+    /// Simulator / no-account note for Family sync settings.
+    static var simulatorICloudFootnote: String {
+        String(localized: "sync.simulator_icloud_footnote")
     }
 
     private init() {
@@ -265,26 +282,36 @@ final class CloudDataManager: ObservableObject {
             }
 
             if let error = event.error {
-                print("[TheGomsons] CloudKit \(typeLabel) failed: \(error.localizedDescription)")
+                if Self.isBenignCloudKitAccountError(error) {
+                    // Simulator without iCloud, or temporary auth — expected; not a crash path.
+                    print("[TheGomsons] CloudKit \(typeLabel): iCloud unavailable (\(Self.shortCloudKitError(error))). Local data still works.")
+                } else {
+                    print("[TheGomsons] CloudKit \(typeLabel) failed: \(error.localizedDescription)")
+                }
                 return
             }
             guard event.endDate != nil else { return }
             print("[TheGomsons] CloudKit \(typeLabel) succeeded")
 
+            // Never rebuild ModelContainer while the UI is live — that was crashing more often
+            // as sync traffic grew. Mark a deferred reload instead.
             if event.type == .import {
                 Task { @MainActor in
-                    CloudDataManager.shared.scheduleSwiftDataReload(reason: "cloudkit-import")
+                    CloudDataManager.shared.noteSuccessfulCloudKitImport()
                 }
             }
         }
 
         // Note: do not reload SwiftData on every `NSPersistentStoreRemoteChange` — that fires
-        // very often (including around local exports) and caused jarring UI resets. Import
-        // success above is the reliable signal that Public DB rows need a SwiftData reopen.
+        // very often (including around local exports) and caused jarring UI resets.
 
         cloudContainer.loadPersistentStores { _, error in
             if let error {
-                fatalError("CloudKit persistent store failed to load: \(error)")
+                print("[TheGomsons] CloudKit persistent store failed to load: \(error)")
+                Task { @MainActor in
+                    self.storeLoadErrorMessage = error.localizedDescription
+                }
+                return
             }
             #if DEBUG
             if !Self.iCloudContainerUsesProductionEntitlement {
@@ -299,8 +326,10 @@ final class CloudDataManager: ObservableObject {
             Task { @MainActor in
                 do {
                     try self.openSwiftDataContainer(schema: schema, storeURL: storeURL)
+                    self.storeLoadErrorMessage = nil
                 } catch {
-                    fatalError("Could not create ModelContainer (same store as CloudKit stack): \(error)")
+                    print("[TheGomsons] Could not create ModelContainer: \(error.localizedDescription)")
+                    self.storeLoadErrorMessage = error.localizedDescription
                 }
                 self.refreshCloudKitAccountStatus()
             }
@@ -323,32 +352,76 @@ final class CloudDataManager: ObservableObject {
         swiftDataStoreEpoch += 1
     }
 
-    /// Debounced reopen after a CloudKit import (batches multi-record imports).
-    func scheduleSwiftDataReload(reason: String) {
-        swiftDataReloadTask?.cancel()
-        swiftDataReloadTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_200_000_000)
-            guard !Task.isCancelled else { return }
-            reloadSwiftDataContainer(reason: reason)
-        }
+    /// CloudKit finished importing into the Core Data side of the dual stack.
+    /// Schedules a **deferred** SwiftData reopen (background / manual)—never swaps mid-session.
+    func noteSuccessfulCloudKitImport() {
+        // Without an iCloud account, "import succeeded" is rare; still don't hot-swap.
+        pendingDeferredSwiftDataReload = true
+        print("[TheGomsons] CloudKit import noted; SwiftData will reopen when the app backgrounds or you tap Reload (epoch \(swiftDataStoreEpoch)).")
+    }
+
+    /// Call when `scenePhase` becomes `.background` so `@Query` picks up imported rows without mid-UI crashes.
+    func applyDeferredSwiftDataReloadIfNeeded() {
+        guard pendingDeferredSwiftDataReload else { return }
+        reloadSwiftDataContainerSafely(reason: "deferred-import", immediate: false)
     }
 
     /// Manual pull from Data backup / troubleshooting — rebuilds SwiftData against the shared store.
     func refreshFamilyDataFromStore() {
-        scheduleSwiftDataReload(reason: "manual-refresh")
+        reloadSwiftDataContainerSafely(reason: "manual-refresh", immediate: true)
     }
 
-    private func reloadSwiftDataContainer(reason: String) {
+    /// Tears down the UI (`modelContainer = nil`) before opening a new container so views
+    /// never keep a dead `ModelContext`.
+    private func reloadSwiftDataContainerSafely(reason: String, immediate: Bool) {
         guard !isReloadingSwiftData else { return }
-        guard modelContainer != nil else { return }
+        guard modelContainer != nil || storeLoadErrorMessage != nil else { return }
         isReloadingSwiftData = true
-        defer { isReloadingSwiftData = false }
-        do {
-            try openSwiftDataContainer(schema: Self.gomsonsSchema, storeURL: Self.storeURL)
-            print("[TheGomsons] Reloaded SwiftData after \(reason) (epoch \(swiftDataStoreEpoch))")
-        } catch {
-            print("[TheGomsons] SwiftData reload failed (\(reason)): \(error.localizedDescription)")
+        pendingDeferredSwiftDataReload = false
+        modelContainer = nil
+
+        Task { @MainActor in
+            // Let SwiftUI drop the old environment before we attach a new container.
+            await Task.yield()
+            if !immediate {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+            defer { isReloadingSwiftData = false }
+            do {
+                try openSwiftDataContainer(schema: Self.gomsonsSchema, storeURL: Self.storeURL)
+                storeLoadErrorMessage = nil
+                print("[TheGomsons] Reloaded SwiftData after \(reason) (epoch \(swiftDataStoreEpoch))")
+            } catch {
+                storeLoadErrorMessage = error.localizedDescription
+                print("[TheGomsons] SwiftData reload failed (\(reason)): \(error.localizedDescription)")
+            }
         }
+    }
+
+    nonisolated private static func isBenignCloudKitAccountError(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == CKError.errorDomain {
+            let code = CKError.Code(rawValue: ns.code)
+            switch code {
+            case .notAuthenticated, .accountTemporarilyUnavailable, .networkUnavailable, .networkFailure:
+                return true
+            default:
+                break
+            }
+        }
+        // Nested / Core Data wrapping
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? Error {
+            return isBenignCloudKitAccountError(underlying)
+        }
+        return false
+    }
+
+    nonisolated private static func shortCloudKitError(_ error: Error) -> String {
+        let ns = error as NSError
+        if ns.domain == CKError.errorDomain {
+            return "CKError \(ns.code)"
+        }
+        return error.localizedDescription
     }
 
     // MARK: - Remote notification handling

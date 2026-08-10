@@ -120,6 +120,7 @@ struct HolidaysView: View {
                 HolidayTrip.self,
                 HolidayDestination.self,
                 HolidayTripParticipant.self,
+                HolidayPlanItem.self,
                 VacationIdea.self,
                 HolidayChatMessage.self,
             ],

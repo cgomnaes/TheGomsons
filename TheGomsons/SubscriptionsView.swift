@@ -172,6 +172,7 @@ struct SubscriptionsView: View {
             FamilyCalendarNotifications.cancelSubExpiry(sub)
             modelContext.delete(sub)
         }
+        try? modelContext.save()
     }
 }
 
@@ -512,6 +513,7 @@ private struct SubscriptionEditorView: View {
                         if let subscription {
                             FamilyCalendarNotifications.cancelSubExpiry(subscription)
                             modelContext.delete(subscription)
+                            try? modelContext.save()
                         }
                         onDone()
                         dismiss()

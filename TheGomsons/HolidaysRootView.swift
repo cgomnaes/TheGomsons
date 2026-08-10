@@ -4,6 +4,7 @@
 //
 
 import CoreLocation
+import PhotosUI
 import SwiftData
 import SwiftUI
 import UIKit
@@ -149,7 +150,7 @@ struct HolidayTripCard: View {
                         }
                     }
                 }
-                .frame(height: 160)
+                .frame(height: 220)
                 .clipped()
 
                 LinearGradient(
@@ -157,7 +158,7 @@ struct HolidayTripCard: View {
                     startPoint: .center,
                     endPoint: .bottom
                 )
-                .frame(height: 160)
+                .frame(height: 220)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(trip.tripName.isEmpty ? String(localized: "trip.untitled") : trip.tripName)
@@ -177,14 +178,6 @@ struct HolidayTripCard: View {
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 } else {
-                    HStack(spacing: 0) {
-                        Text(String(localized: "trip.crew"))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                            .textCase(.uppercase)
-                            .tracking(0.6)
-                        Spacer()
-                    }
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: -10) {
                             ForEach(Array(sortedParticipants.enumerated()), id: \.element.persistentModelID) { index, person in
@@ -344,7 +337,15 @@ struct HolidayTripDetailView: View {
                     tripHeroBlock(width: contentWidth)
 
                     VStack(alignment: .leading, spacing: 28) {
+                        if !trip.isPastTrip {
+                            HolidayTripPlanningSection(trip: trip)
+                        }
+
                         notesSection
+
+                        if trip.isPastTrip {
+                            HolidayTripReviewSection(trip: trip)
+                        }
 
                         travelDetailsSection
 
@@ -1507,6 +1508,193 @@ private extension String {
         }
         let take = min(max, parts.count)
         return parts.prefix(take).compactMap { $0.first.map(String.init) }.joined().uppercased()
+    }
+}
+
+// MARK: - Past-trip review (text + up to 3 photos)
+
+private struct HolidayTripReviewSection: View {
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var trip: HolidayTrip
+
+    @State private var pickerItem: PhotosPickerItem?
+    @State private var pickerTargetSlot: Int?
+    @State private var photoViewer: ReviewPhotoViewerItem?
+
+    private let maxPhotos = 3
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(String(localized: "trip.review"))
+                .font(.title2.weight(.bold))
+            Text(String(localized: "trip.review.hint"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            TextEditor(text: $trip.reviewText)
+                .font(.body)
+                .frame(minHeight: 110)
+                .padding(10)
+                .scrollContentBackground(.hidden)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color(.secondarySystemGroupedBackground))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color(.separator).opacity(0.35), lineWidth: 1)
+                }
+                .onChange(of: trip.reviewText) { _, _ in
+                    try? modelContext.save()
+                }
+
+            Text(String(localized: "trip.review.photos"))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                ForEach(0..<maxPhotos, id: \.self) { index in
+                    reviewPhotoSlot(at: index)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: pickerItem) { _, item in
+            Task { await importPickedPhoto(item) }
+        }
+        .fullScreenCover(item: $photoViewer) { item in
+            HolidayTripReviewPhotoViewer(imageData: item.data) {
+                photoViewer = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func reviewPhotoSlot(at index: Int) -> some View {
+        if let data = trip.reviewPhotoData(at: index), let ui = UIImage(data: data) {
+            ZStack(alignment: .topTrailing) {
+                Button {
+                    photoViewer = ReviewPhotoViewerItem(data: data)
+                } label: {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 96)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "trip.review.photo_a11y"))
+
+                Button {
+                    trip.setReviewPhotoData(nil, at: index)
+                    try? modelContext.save()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.55))
+                        .font(.title3)
+                        .padding(4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "trip.review.remove_photo"))
+            }
+            .frame(maxWidth: .infinity)
+        } else {
+            PhotosPicker(
+                selection: Binding(
+                    get: { pickerTargetSlot == index ? pickerItem : nil },
+                    set: { newValue in
+                        pickerTargetSlot = index
+                        pickerItem = newValue
+                    }
+                ),
+                matching: .images,
+                photoLibrary: .shared()
+            ) {
+                VStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.title3.weight(.semibold))
+                    Text(String(localized: "trip.review.slot"))
+                        .font(.caption2.weight(.medium))
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 96)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                        .foregroundStyle(Color(.separator))
+                }
+            }
+            .accessibilityLabel(String(localized: "trip.review.add_photo"))
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func importPickedPhoto(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        let slot = pickerTargetSlot ?? trip.firstEmptyReviewPhotoSlot
+        guard let slot else {
+            await MainActor.run {
+                pickerItem = nil
+                pickerTargetSlot = nil
+            }
+            return
+        }
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data),
+              let jpeg = image.jpegData(compressionQuality: 0.85)
+        else {
+            await MainActor.run {
+                pickerItem = nil
+                pickerTargetSlot = nil
+            }
+            return
+        }
+        await MainActor.run {
+            trip.setReviewPhotoData(jpeg, at: slot)
+            try? modelContext.save()
+            pickerItem = nil
+            pickerTargetSlot = nil
+        }
+    }
+}
+
+private struct ReviewPhotoViewerItem: Identifiable {
+    let id = UUID()
+    let data: Data
+}
+
+private struct HolidayTripReviewPhotoViewer: View {
+    let imageData: Data
+    let onClose: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let ui = UIImage(data: imageData) {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(.black)
+                } else {
+                    ContentUnavailableView(
+                        String(localized: "trip.review.photo_missing"),
+                        systemImage: "photo"
+                    )
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.done")) {
+                        onClose()
+                    }
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+        }
     }
 }
 

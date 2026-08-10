@@ -265,6 +265,14 @@ trip.delete_confirm_past|Delete this past trip? Stops and travelers are removed 
 trip.delete_confirm_upcoming|Delete this upcoming trip? Stops and travelers are removed too.|Slette denne kommende turen? Stopp og deltakere fjernes også.
 trip.notes|Notes|Notater
 trip.notes.hint|Packing lists, bookings, memories—editable here or in Edit trip.|Pakkelister, bookinger, minner — rediger her eller i Rediger tur.
+trip.review|Review|Anmeldelse
+trip.review.hint|How was the trip? Write a short review after you get home.|Hvordan var turen? Skriv en kort anmeldelse når dere er hjemme.
+trip.review.photos|Photos (up to 3)|Bilder (opptil 3)
+trip.review.add_photo|Add photo|Legg til bilde
+trip.review.remove_photo|Remove photo|Fjern bilde
+trip.review.photo_a11y|Review photo|Anmeldelsesbilde
+trip.review.slot|Photo|Bilde
+trip.review.photo_missing|Photo unavailable|Bilde utilgjengelig
 trip.travel_stay|Travel & stay|Reise og opphold
 trip.airline|Airline|Flyselskap
 trip.reference|Reference #|Referanse #
@@ -353,7 +361,7 @@ map.filter.upcoming|Upcoming|Kommende
 map.filter.ideas|Ideas|Ideer
 map.empty.all_title|No holiday pins yet|Ingen ferienåler ennå
 map.empty.filter_title|Nothing to show|Ingenting å vise
-map.empty.all_detail|Each trip uses the city you pick for the heading photo (Edit trip). Without that, we try your cover place name, main accommodation, or trip name. Stops only affect each trip’s route map. Ideas need a place or coordinates. Use All, Past, Upcoming, or Ideas above.|Hver tur bruker byen du velger for toppbildet (Rediger tur). Uten det prøver vi omslagssted, hovedovernatting eller turnavn. Stopp påvirker bare rutekartet for turen. Ideer trenger sted eller koordinater. Bruk Alle, Tidligere, Kommende eller Ideer over.
+map.empty.all_detail|Tap a trip pin to open that trip. Each trip uses the city you pick for the heading photo (Edit trip). Without that, we try your cover place name, main accommodation, or trip name. Stops only affect each trip’s route map. Ideas need a place or coordinates. Use All, Past, Upcoming, or Ideas above.|Trykk en turnål for å åpne turen. Hver tur bruker byen du velger for toppbildet (Rediger tur). Uten det prøver vi omslagssted, hovedovernatting eller turnavn. Stopp påvirker bare rutekartet for turen. Ideer trenger sted eller koordinater. Bruk Alle, Tidligere, Kommende eller Ideer over.
 map.empty.past_detail|No past trips to show yet. Edit a trip, search under the heading photo, and pick a city—or we’ll try to place it from main accommodation or the trip name.|Ingen tidligere turer å vise ennå. Rediger en tur, søk under toppbildet og velg by — eller vi prøver å plassere den fra hovedovernatting eller turnavn.
 map.empty.upcoming_detail|No upcoming trips to show yet. Set a cover city from Edit trip, or fill in main accommodation or the trip name so we can place the pin.|Ingen kommende turer å vise ennå. Sett omslagsby i Rediger tur, eller fyll inn hovedovernatting eller turnavn så vi kan plassere nålen.
 map.empty.ideas_detail|No vacation ideas with a map location yet. Add a proposal on the Ideas tab with a place search or coordinates.|Ingen ferieideer med kartsted ennå. Legg til et forslag under Ideer med stedsøk eller koordinater.
@@ -430,9 +438,12 @@ tripit.source_feed|calendar feed|kalenderfeed
 map.pin.trip_fallback|Trip|Tur
 map.pin.stop_fallback|Stop|Stopp
 map.pin.idea_fallback|Idea|Idé
-map.a11y.past|Past trip stop|Stopp på tidligere tur
-map.a11y.planned|Upcoming or current trip stop|Stopp på kommende eller pågående tur
+map.a11y.past|Past trip|Tidligere tur
+map.a11y.planned|Upcoming or current trip|Kommende eller pågående tur
 map.a11y.idea|Proposed vacation idea|Foreslått ferieidé
+map.a11y.open_trip|Opens this trip|Åpner denne turen
+map.trip_missing_title|Trip not found|Tur ikke funnet
+map.trip_missing_detail|That trip may have been deleted or is still syncing.|Turen kan være slettet eller synkroniseres fortsatt.
 geocode.empty|Enter a place name to look up.|Skriv inn et stedsnavn å slå opp.
 geocode.no_results|No location found. Try a different spelling or enter latitude and longitude.|Fant ikke sted. Prøv annen stavemåte, eller skriv bredde- og lengdegrad.
 tripit.err.empty|The file or feed was empty.|Filen eller feeden var tom.

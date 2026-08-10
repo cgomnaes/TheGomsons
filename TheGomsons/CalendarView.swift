@@ -184,7 +184,7 @@ struct CalendarView: View {
                         ))
                         .disabled(person.birthDate == nil)
                     }
-                    .navigationTitle(person.name.isEmpty ? String(localized: "family_tree.title") : person.name)
+                    .navigationTitle(person.displayName.isEmpty ? String(localized: "family_tree.title") : person.displayName)
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
@@ -586,7 +586,7 @@ struct CalendarView: View {
 
     private func treeBirthdayRow(_ person: FamilyPerson, showRelativeDay: Bool, displayDate: Date?) -> some View {
         let primary = displayDate ?? person.birthDate ?? Date()
-        let name = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = person.displayName
         return HStack(alignment: .top, spacing: 12) {
             Image(systemName: FamilyEventKind.birthday.systemImageName)
                 .font(.title3)

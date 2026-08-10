@@ -73,6 +73,8 @@ struct HolidayWorldMapView: View {
     @State private var mapFilter: HolidayWorldMapFilter = .all
     /// Geocoded coordinates when a trip has no stored cover coordinates (cover place name, else main stay / trip name).
     @State private var geocodedTripAnchors: [PersistentIdentifier: CLLocationCoordinate2D] = [:]
+    /// Tap a trip pin to open that trip’s detail.
+    @State private var selectedTripID: PersistentIdentifier?
 
     private var mapBaseStyle: HolidayMapBaseStyle {
         HolidayMapBaseStyle(rawValue: mapStyleRaw) ?? .standard
@@ -116,7 +118,8 @@ struct HolidayWorldMapView: View {
                             id: "trip-cover-\(trip.persistentModelID)",
                             coordinate: trip.coverMapCoordinate,
                             title: Self.tripWorldMapPinTitle(trip),
-                            kind: kind
+                            kind: kind,
+                            tripID: trip.persistentModelID
                         )
                     )
                 } else if let coord = geocodedTripAnchors[trip.persistentModelID] {
@@ -125,7 +128,8 @@ struct HolidayWorldMapView: View {
                             id: "trip-geocoded-\(trip.persistentModelID)",
                             coordinate: coord,
                             title: Self.tripWorldMapPinTitle(trip),
-                            kind: kind
+                            kind: kind,
+                            tripID: trip.persistentModelID
                         )
                     )
                 }
@@ -138,7 +142,8 @@ struct HolidayWorldMapView: View {
                         id: "idea-\(idea.persistentModelID)",
                         coordinate: idea.coordinate,
                         title: idea.mapAnnotationTitle,
-                        kind: .proposedIdea
+                        kind: .proposedIdea,
+                        tripID: nil
                     )
                 )
             }
@@ -194,7 +199,17 @@ struct HolidayWorldMapView: View {
                     Map(position: $position) {
                         ForEach(pins) { pin in
                             Annotation(pin.title, coordinate: pin.coordinate) {
-                                HolidayMapPinView(kind: pin.kind, seed: pin.id.hashValue)
+                                if let tripID = pin.tripID {
+                                    Button {
+                                        selectedTripID = tripID
+                                    } label: {
+                                        HolidayMapPinView(kind: pin.kind, seed: pin.id.hashValue)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityHint(String(localized: "map.a11y.open_trip"))
+                                } else {
+                                    HolidayMapPinView(kind: pin.kind, seed: pin.id.hashValue)
+                                }
                             }
                         }
                     }
@@ -202,6 +217,17 @@ struct HolidayWorldMapView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .navigationDestination(item: $selectedTripID) { tripID in
+            if let trip = allTrips.first(where: { $0.persistentModelID == tripID }) {
+                HolidayTripDetailView(trip: trip)
+            } else {
+                ContentUnavailableView(
+                    String(localized: "map.trip_missing_title"),
+                    systemImage: "suitcase",
+                    description: Text(String(localized: "map.trip_missing_detail"))
+                )
+            }
         }
         .onAppear {
             fitCameraIfPossible()
@@ -390,6 +416,8 @@ private struct WorldMapPin: Identifiable {
     let coordinate: CLLocationCoordinate2D
     let title: String
     let kind: Kind
+    /// Set for past/upcoming trip pins so a tap can open the trip.
+    let tripID: PersistentIdentifier?
 }
 
 // MARK: - Pin visuals

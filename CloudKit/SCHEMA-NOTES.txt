@@ -54,3 +54,12 @@ the recipe box so family devices can sync place-linked recipes.
 Property maintenance log: new record type CD_PropertyMaintenanceEntry (title, categoryRaw,
 performedAt, nextDueAt, performedBy, costAmount, notes, photoData, property, sortOrder).
 Import/deploy after shipping the maintenance log UI.
+
+Subscriptions: CD_expiryDate (TIMESTAMP) and CD_includeInSummary (INT64/bool) on
+CD_Subscription. Missing these fields in Production makes every subscription save fail
+CloudKit export (“Cannot create or modify field… in production schema”) so other users
+never see updates—import/deploy PublicSchema.ckdb (Development → Deploy to Production).
+
+Holiday trip reviews: CD_reviewText plus CD_reviewPhoto1Data / CD_reviewPhoto2Data /
+CD_reviewPhoto3Data (each BYTES + _ckAsset) on CD_HolidayTrip. Import/deploy after
+shipping the past-trip review UI (up to three photos).

@@ -47,6 +47,14 @@ struct DataBackupSettingsView: View {
                     Text(CloudDataManager.syncBuildEnvironmentFootnote)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Text(CloudDataManager.simulatorICloudFootnote)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if cloud.pendingDeferredSwiftDataReload {
+                        Text(String(localized: "sync.pending_reload_hint"))
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                     Button(String(localized: "sync.reload_local")) {
                         cloud.refreshFamilyDataFromStore()
                         refreshToken = UUID()

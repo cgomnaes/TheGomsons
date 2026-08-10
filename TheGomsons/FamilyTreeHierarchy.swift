@@ -7,12 +7,12 @@ import SwiftData
 import SwiftUI
 import UIKit
 
-// MARK: - Tree model
+// MARK: - Tree model (descendant columns)
 
 struct FamilyTreeNode: Identifiable {
     let id: PersistentIdentifier
     let person: FamilyPerson
-    /// The other parent when every child lists both parents (mother + father) in the universe—shown beside `person`.
+    /// The other parent when every child lists both parents—shown beside `person`.
     let coParent: FamilyPerson?
     let children: [FamilyTreeNode]
 
@@ -24,25 +24,63 @@ struct FamilyTreeNode: Identifiable {
     }
 }
 
+/// Person-centered snapshot: ancestors above, focus (+ partner) in the middle, siblings beside, descendants below.
+struct FamilyEgoGraph: Identifiable {
+    var id: PersistentIdentifier { focus.persistentModelID }
+    var focus: FamilyPerson
+    var partner: FamilyPerson?
+    var mother: FamilyPerson?
+    var father: FamilyPerson?
+    var maternalGrandmother: FamilyPerson?
+    var maternalGrandfather: FamilyPerson?
+    var paternalGrandmother: FamilyPerson?
+    var paternalGrandfather: FamilyPerson?
+    var siblings: [FamilyPerson]
+    var childNodes: [FamilyTreeNode]
+
+    var hasAncestors: Bool {
+        mother != nil || father != nil
+            || maternalGrandmother != nil || maternalGrandfather != nil
+            || paternalGrandmother != nil || paternalGrandfather != nil
+    }
+
+    var hasDescendants: Bool { !childNodes.isEmpty }
+}
+
 enum FamilyTreeHierarchyBuilder {
-    /// Prefer mother for the downward edge so two-parent children appear once (below mother if present, else father).
     static func treeParent(in universe: Set<PersistentIdentifier>, for child: FamilyPerson) -> FamilyPerson? {
         if let m = child.mother, universe.contains(m.persistentModelID) { return m }
         if let f = child.father, universe.contains(f.persistentModelID) { return f }
         return nil
     }
 
-    /// Direct children whose chosen tree parent is `person`.
     static func children(of person: FamilyPerson, in universe: [FamilyPerson]) -> [FamilyPerson] {
         let ids = Set(universe.map(\.persistentModelID))
-        return universe
+        var kids = universe
             .filter { ids.contains($0.persistentModelID) }
             .filter { treeParent(in: ids, for: $0)?.persistentModelID == person.persistentModelID }
-            .sorted { $0.sortOrder < $1.sortOrder }
+
+        var omit = Set<PersistentIdentifier>()
+        for a in kids {
+            guard let b = a.resolvedPartner, ids.contains(b.persistentModelID) else { continue }
+            guard kids.contains(where: { $0.persistentModelID == b.persistentModelID }) else { continue }
+            let keepA =
+                a.sortOrder < b.sortOrder
+                || (a.sortOrder == b.sortOrder
+                    && String(describing: a.persistentModelID) < String(describing: b.persistentModelID))
+            omit.insert(keepA ? b.persistentModelID : a.persistentModelID)
+        }
+        if !omit.isEmpty {
+            kids = kids.filter { !omit.contains($0.persistentModelID) }
+        }
+        return kids.sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    /// When all of `parent`’s listed children share the same other biological parent and that person is in `universe`.
-    static func coParentIfShared(parent: FamilyPerson, children: [FamilyPerson], universe: Set<PersistentIdentifier>) -> FamilyPerson? {
+    static func coParentIfShared(
+        parent: FamilyPerson,
+        children: [FamilyPerson],
+        universe: Set<PersistentIdentifier>
+    ) -> FamilyPerson? {
         guard !children.isEmpty else { return nil }
         var expected: FamilyPerson?
         for c in children {
@@ -61,59 +99,7 @@ enum FamilyTreeHierarchyBuilder {
         return expected
     }
 
-    /// People with no parent in the universe (top of the visual tree). Drops duplicate “roots” for the non–tree-parent when the couple row will show both parents.
-    static func roots(in universe: [FamilyPerson]) -> [FamilyPerson] {
-        let ids = Set(universe.map(\.persistentModelID))
-        let roots = universe
-            .filter { treeParent(in: ids, for: $0) == nil }
-            .sorted { $0.sortOrder < $1.sortOrder }
-        let rootIds = Set(roots.map(\.persistentModelID))
-        var remove = Set<PersistentIdentifier>()
-        for p in roots {
-            let kids = children(of: p, in: universe)
-            guard !kids.isEmpty else { continue }
-            guard let co = coParentIfShared(parent: p, children: kids, universe: ids) else { continue }
-            guard rootIds.contains(co.persistentModelID) else { continue }
-            // `p` is the structural parent row; `co` is shown beside them—omit `co` as a separate root column.
-            remove.insert(co.persistentModelID)
-        }
-        // Partner with no parents in the universe should not be a separate column when their spouse is already
-        // under someone else’s subtree (e.g. you under your parents, spouse beside you instead of a second root).
-        for r in roots {
-            guard let p = r.resolvedPartner, ids.contains(p.persistentModelID) else { continue }
-            if treeParent(in: ids, for: p) != nil {
-                remove.insert(r.persistentModelID)
-                continue
-            }
-            // Both partners are roots (no parents in universe): keep a single root; the other appears in the couple row.
-            if rootIds.contains(p.persistentModelID), r.persistentModelID != p.persistentModelID,
-               treeParent(in: ids, for: r) == nil, treeParent(in: ids, for: p) == nil {
-                let tie = String(describing: r.persistentModelID) > String(describing: p.persistentModelID)
-                if r.sortOrder > p.sortOrder || (r.sortOrder == p.sortOrder && tie) {
-                    remove.insert(r.persistentModelID)
-                }
-            }
-        }
-
-        let filtered = roots.filter { !remove.contains($0.persistentModelID) }
-        if !filtered.isEmpty { return filtered }
-
-        // Partner/co-parent merging can remove every root while the list still has people (e.g. in-law with spouse
-        // whose parent is outside the branch filter). Fall back to structural roots only—better a duplicate spouse
-        // column than an empty tree.
-        let structuralOnly = roots
-        if !structuralOnly.isEmpty { return structuralOnly }
-
-        // Cycles or everyone has a parent in-universe: show top tier(s) so the tree isn’t blank.
-        let noParent = universe.filter { treeParent(in: ids, for: $0) == nil }.sorted { $0.sortOrder < $1.sortOrder }
-        if !noParent.isEmpty { return noParent }
-
-        let minTier = universe.map(\.treeTier).min() ?? 0
-        return universe.filter { $0.treeTier == minTier }.sorted { $0.sortOrder < $1.sortOrder }
-    }
-
-    /// Children whose tree parent is `person`, unioned with children of `person`’s partner when the partner is in the universe (one household column).
-    private static func mergedChildren(for person: FamilyPerson, in universe: [FamilyPerson]) -> [FamilyPerson] {
+    static func mergedChildren(for person: FamilyPerson, in universe: [FamilyPerson]) -> [FamilyPerson] {
         let ids = Set(universe.map(\.persistentModelID))
         let mine = children(of: person, in: universe)
         guard let partner = person.resolvedPartner, ids.contains(partner.persistentModelID) else { return mine }
@@ -127,37 +113,143 @@ enum FamilyTreeHierarchyBuilder {
         return merged.sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    static func buildForest(from universe: [FamilyPerson]) -> [FamilyTreeNode] {
-        let roots = roots(in: universe)
-        var primarySeen = Set<PersistentIdentifier>()
-        return roots.map { buildSubtree(person: $0, universe: universe, primarySeen: &primarySeen) }
+    /// Saved home → household with kids → household → anyone.
+    static func defaultFocus(in universe: [FamilyPerson], preferredHomeName: String?) -> FamilyPerson? {
+        guard !universe.isEmpty else { return nil }
+        if let preferredHomeName {
+            let key = preferredHomeName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !key.isEmpty,
+               let home = universe.first(where: {
+                   $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key
+               }) {
+                return home
+            }
+        }
+        let household = universe.filter { $0.branch == .ourHousehold }
+        if let withKids = household.first(where: { !mergedChildren(for: $0, in: universe).isEmpty }) {
+            return withKids
+        }
+        if let firstHousehold = household.sorted(by: { $0.sortOrder < $1.sortOrder }).first {
+            return firstHousehold
+        }
+        return universe.sorted { $0.sortOrder < $1.sortOrder }.first
     }
 
-    private static func buildSubtree(person: FamilyPerson, universe: [FamilyPerson], primarySeen: inout Set<PersistentIdentifier>) -> FamilyTreeNode {
+    static func buildEgoGraph(
+        focus: FamilyPerson,
+        universe: [FamilyPerson],
+        ancestorGenerations: Int = 2,
+        descendantGenerations: Int = 2
+    ) -> FamilyEgoGraph {
+        let ids = Set(universe.map(\.persistentModelID))
+        let ancDepth = max(1, min(ancestorGenerations, 3))
+        let descDepth = max(1, min(descendantGenerations, 3))
+
+        func inUniverse(_ p: FamilyPerson?) -> FamilyPerson? {
+            guard let p, ids.contains(p.persistentModelID) else { return nil }
+            return p
+        }
+
+        let mother = inUniverse(focus.mother)
+        let father = inUniverse(focus.father)
+        let partner = inUniverse(focus.resolvedPartner)
+
+        var matGM: FamilyPerson?
+        var matGF: FamilyPerson?
+        var patGM: FamilyPerson?
+        var patGF: FamilyPerson?
+        if ancDepth >= 2 {
+            matGM = inUniverse(mother?.mother)
+            matGF = inUniverse(mother?.father)
+            patGM = inUniverse(father?.mother)
+            patGF = inUniverse(father?.father)
+        }
+
+        let focusID = focus.persistentModelID
+        let partnerID = partner?.persistentModelID
+        let siblings = focus.resolvedSiblings(among: universe)
+            .filter { $0.persistentModelID != focusID && $0.persistentModelID != partnerID }
+            .sorted { $0.sortOrder < $1.sortOrder }
+
+        var primarySeen = Set<PersistentIdentifier>([focusID])
+        if let partnerID { primarySeen.insert(partnerID) }
+
+        let kids = mergedChildren(for: focus, in: universe)
+            .filter { $0.persistentModelID != focusID && $0.persistentModelID != partnerID }
+        let childNodes = kids.map {
+            buildSubtree(
+                person: $0,
+                universe: universe,
+                primarySeen: &primarySeen,
+                remainingDepth: descDepth - 1
+            )
+        }
+
+        return FamilyEgoGraph(
+            focus: focus,
+            partner: partner,
+            mother: mother,
+            father: father,
+            maternalGrandmother: matGM,
+            maternalGrandfather: matGF,
+            paternalGrandmother: patGM,
+            paternalGrandfather: patGF,
+            siblings: siblings,
+            childNodes: childNodes
+        )
+    }
+
+    private static func buildSubtree(
+        person: FamilyPerson,
+        universe: [FamilyPerson],
+        primarySeen: inout Set<PersistentIdentifier>,
+        remainingDepth: Int
+    ) -> FamilyTreeNode {
         let ids = Set(universe.map(\.persistentModelID))
         primarySeen.insert(person.persistentModelID)
 
+        guard remainingDepth > 0 else {
+            return FamilyTreeNode(person: person, coParent: nil, children: [])
+        }
+
         let childPeople = mergedChildren(for: person, in: universe)
-        var coBio = coParentIfShared(parent: person, children: childPeople, universe: ids)
-        if let c = coBio, primarySeen.contains(c.persistentModelID) {
-            // Already shown as their own node (e.g. you under your parents)—don’t draw again beside your spouse.
-            coBio = nil
+            .filter { !primarySeen.contains($0.persistentModelID) }
+        let hangsUnderSomeone = treeParent(in: ids, for: person) != nil
+
+        var beside: FamilyPerson?
+        if !hangsUnderSomeone {
+            var coBio = coParentIfShared(parent: person, children: childPeople, universe: ids)
+            if let c = coBio, primarySeen.contains(c.persistentModelID) {
+                coBio = nil
+            }
+            beside = coBio
+            if beside == nil,
+               let p = person.resolvedPartner,
+               ids.contains(p.persistentModelID),
+               !primarySeen.contains(p.persistentModelID) {
+                beside = p
+            }
+            if let b = beside {
+                primarySeen.insert(b.persistentModelID)
+            }
         }
 
-        var beside = coBio
-        if beside == nil, let p = person.resolvedPartner, ids.contains(p.persistentModelID), !primarySeen.contains(p.persistentModelID) {
-            beside = p
+        let childNodes = childPeople.map {
+            buildSubtree(
+                person: $0,
+                universe: universe,
+                primarySeen: &primarySeen,
+                remainingDepth: remainingDepth - 1
+            )
         }
-        if let b = beside {
-            primarySeen.insert(b.persistentModelID)
-        }
-
-        let childNodes = childPeople.map { buildSubtree(person: $0, universe: universe, primarySeen: &primarySeen) }
         return FamilyTreeNode(person: person, coParent: beside, children: childNodes)
     }
 
-    /// When searching: include matches, their ancestors, and descendants so the tree stays meaningful.
-    static func visibleUniverse(from all: [FamilyPerson], branchMatches: (FamilyTreeBranch) -> Bool, search: String) -> [FamilyPerson] {
+    static func visibleUniverse(
+        from all: [FamilyPerson],
+        branchMatches: (FamilyTreeBranch) -> Bool,
+        search: String
+    ) -> [FamilyPerson] {
         let branchFiltered = all.filter { branchMatches($0.branch) }
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !q.isEmpty else { return branchFiltered }
@@ -213,62 +305,347 @@ enum FamilyTreeHierarchyBuilder {
     }
 }
 
-// MARK: - Visual tree
+// MARK: - Home person preference
 
-struct FamilyTreeHierarchyView: View {
-    let nodes: [FamilyTreeNode]
-    var onSelect: (FamilyPerson) -> Void
+enum FamilyTreeHomePersonStore {
+    private static let nameKey = "familyTree.homePersonName"
+    private static let generationsKey = "familyTree.generationDepth"
+
+    /// Display name of the person who represents “me” on this device.
+    static var mePersonName: String? {
+        get {
+            let s = UserDefaults.standard.string(forKey: nameKey)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return (s?.isEmpty == false) ? s : nil
+        }
+        set {
+            if let newValue, !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                UserDefaults.standard.set(newValue, forKey: nameKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: nameKey)
+            }
+        }
+    }
+
+    /// Kept for older call sites.
+    static var homePersonName: String? {
+        get { mePersonName }
+        set { mePersonName = newValue }
+    }
+
+    static var generationDepth: Int {
+        get {
+            let v = UserDefaults.standard.integer(forKey: generationsKey)
+            return v == 0 ? 2 : min(max(v, 1), 3)
+        }
+        set {
+            UserDefaults.standard.set(min(max(newValue, 1), 3), forKey: generationsKey)
+        }
+    }
+
+    static func setMe(_ person: FamilyPerson) {
+        let name = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        mePersonName = name.isEmpty ? nil : name
+    }
+
+    static func setHome(_ person: FamilyPerson) {
+        setMe(person)
+    }
+}
+
+// MARK: - Ego-centric visual tree
+
+struct FamilyEgoTreeView: View {
+    let graph: FamilyEgoGraph
+    /// Full universe used for kinship labels (branch + search filtered).
+    let universe: [FamilyPerson]
+    /// Selected “me” — labels are relative to this person.
+    var mePerson: FamilyPerson?
+    var onFocus: (FamilyPerson) -> Void
+    var onShowProfile: (FamilyPerson) -> Void
+    var onSetMe: (FamilyPerson) -> Void
+    var mePersonName: String?
 
     var body: some View {
-        ScrollView(.vertical) {
-            ScrollView(.horizontal, showsIndicators: true) {
-                HStack(alignment: .top, spacing: 24) {
-                    ForEach(nodes) { node in
-                        FamilyTreeNodeColumn(node: node, onSelect: onSelect)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                ScrollView(.horizontal, showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        if graph.hasAncestors {
+                            ancestorBlock
+                            TreeConnectorLineDown()
+                        }
+
+                        focusRow
+                            .id("ego-focus")
+
+                        if !graph.siblings.isEmpty {
+                            siblingsRow
+                        }
+
+                        if graph.hasDescendants {
+                            TreeConnectorLineDown()
+                            descendantsRow
+                        }
+                    }
+                    .padding(.vertical, 20)
+                    .padding(.horizontal, 16)
+                    .frame(minWidth: UIScreen.main.bounds.width - 24)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo("ego-focus", anchor: .center)
                     }
                 }
-                .padding(.vertical, 16)
-                .padding(.horizontal, 12)
             }
-            .frame(maxWidth: .infinity)
+            .onChange(of: graph.focus.persistentModelID) { _, _ in
+                DispatchQueue.main.async {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo("ego-focus", anchor: .center)
+                    }
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private var ancestorBlock: some View {
+        VStack(spacing: 10) {
+            if hasAnyGrandparents {
+                HStack(alignment: .top, spacing: 28) {
+                    grandparentCouple(
+                        left: graph.maternalGrandmother,
+                        right: graph.maternalGrandfather,
+                        label: "Mother’s parents"
+                    )
+                    grandparentCouple(
+                        left: graph.paternalGrandmother,
+                        right: graph.paternalGrandfather,
+                        label: "Father’s parents"
+                    )
+                }
+                if graph.mother != nil || graph.father != nil {
+                    TreeConnectorLineDown()
+                }
+            }
+
+            if graph.mother != nil || graph.father != nil {
+                HStack(alignment: .center, spacing: 8) {
+                    if let mother = graph.mother {
+                        personCard(mother, role: "Mother", emphasized: false)
+                    }
+                    if graph.mother != nil, graph.father != nil {
+                        ParentPartnershipBadge()
+                    }
+                    if let father = graph.father {
+                        personCard(father, role: "Father", emphasized: false)
+                    }
+                }
+            }
+        }
+    }
+
+    private var hasAnyGrandparents: Bool {
+        graph.maternalGrandmother != nil || graph.maternalGrandfather != nil
+            || graph.paternalGrandmother != nil || graph.paternalGrandfather != nil
+    }
+
+    @ViewBuilder
+    private func grandparentCouple(left: FamilyPerson?, right: FamilyPerson?, label: String) -> some View {
+        if left != nil || right != nil {
+            VStack(spacing: 6) {
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                HStack(spacing: 6) {
+                    if let left {
+                        personCard(left, role: nil, emphasized: false, compact: true)
+                    }
+                    if left != nil, right != nil {
+                        ParentPartnershipBadge()
+                    }
+                    if let right {
+                        personCard(right, role: nil, emphasized: false, compact: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private var focusRow: some View {
+        VStack(spacing: 8) {
+            Text("Centered on")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+            HStack(alignment: .center, spacing: 10) {
+                personCard(graph.focus, role: nil, emphasized: true)
+                if let partner = graph.partner {
+                    ParentPartnershipBadge()
+                    personCard(partner, role: partnerRoleLabel, emphasized: false)
+                }
+            }
+            Button {
+                onShowProfile(graph.focus)
+            } label: {
+                Label("View profile", systemImage: "person.crop.circle")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(SimpsonsTheme.orange.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(SimpsonsTheme.orange.opacity(0.35), lineWidth: 1.5)
+        )
+    }
+
+    private var partnerRoleLabel: String? {
+        graph.focus.displayPartnerStatus?.displayTitle
+    }
+
+    private var siblingsRow: some View {
+        VStack(spacing: 6) {
+            Text("Siblings")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.top, 10)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(graph.siblings, id: \.persistentModelID) { sibling in
+                        personCard(sibling, role: "Sibling", emphasized: false, compact: true)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    private var descendantsRow: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ForEach(graph.childNodes) { node in
+                FamilyTreeNodeColumn(
+                    node: node,
+                    focusID: graph.focus.persistentModelID,
+                    universe: universe,
+                    mePerson: mePerson,
+                    onFocus: onFocus,
+                    onShowProfile: onShowProfile,
+                    onSetMe: onSetMe,
+                    mePersonName: mePersonName
+                )
+            }
+        }
+    }
+
+    private func personCard(
+        _ person: FamilyPerson,
+        role: String?,
+        emphasized: Bool,
+        compact: Bool = false
+    ) -> some View {
+        FamilyTreePersonCard(
+            person: person,
+            roleLabel: displayRole(for: person, structural: role),
+            showsPartnerCaption: false,
+            isFocused: emphasized,
+            isMe: isMe(person),
+            compact: compact,
+            onTap: { onFocus(person) },
+            onShowProfile: { onShowProfile(person) },
+            onSetMe: { onSetMe(person) }
+        )
+    }
+
+    /// Prefer kinship-to-me labels; fall back to structural Mother/Father when “me” isn’t set.
+    private func displayRole(for person: FamilyPerson, structural: String?) -> String? {
+        if let mePerson {
+            return FamilyKinship.label(of: person, relativeTo: mePerson, among: universe)
+        }
+        return structural
+    }
+
+    private func isMe(_ person: FamilyPerson) -> Bool {
+        guard let mePersonName else { return false }
+        return person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare(mePersonName) == .orderedSame
     }
 }
 
 private struct FamilyTreeNodeColumn: View {
     let node: FamilyTreeNode
-    var onSelect: (FamilyPerson) -> Void
+    var focusID: PersistentIdentifier
+    var universe: [FamilyPerson]
+    var mePerson: FamilyPerson?
+    var onFocus: (FamilyPerson) -> Void
+    var onShowProfile: (FamilyPerson) -> Void
+    var onSetMe: (FamilyPerson) -> Void
+    var mePersonName: String?
 
     var body: some View {
         VStack(spacing: 0) {
             if let co = node.coParent {
                 let sampleChild = node.children.first?.person
                 HStack(alignment: .center, spacing: 6) {
-                    FamilyTreePersonCard(
-                        person: node.person,
-                        roleLabel: parentalRoleLabel(adult: node.person, sampleChild: sampleChild),
-                        onTap: { onSelect(node.person) }
-                    )
+                    card(node.person, structural: parentalRoleLabel(adult: node.person, sampleChild: sampleChild))
                     ParentPartnershipBadge()
-                    FamilyTreePersonCard(
-                        person: co,
-                        roleLabel: parentalRoleLabel(adult: co, sampleChild: sampleChild),
-                        onTap: { onSelect(co) }
-                    )
+                    card(co, structural: parentalRoleLabel(adult: co, sampleChild: sampleChild))
                 }
             } else {
-                FamilyTreePersonCard(person: node.person, onTap: { onSelect(node.person) })
+                card(node.person, structural: nil)
             }
 
             if !node.children.isEmpty {
                 TreeConnectorLineDown()
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(node.children) { child in
-                        FamilyTreeNodeColumn(node: child, onSelect: onSelect)
+                        FamilyTreeNodeColumn(
+                            node: child,
+                            focusID: focusID,
+                            universe: universe,
+                            mePerson: mePerson,
+                            onFocus: onFocus,
+                            onShowProfile: onShowProfile,
+                            onSetMe: onSetMe,
+                            mePersonName: mePersonName
+                        )
                     }
                 }
             }
         }
+    }
+
+    private func card(_ person: FamilyPerson, structural: String?) -> some View {
+        let role: String?
+        if let mePerson {
+            role = FamilyKinship.label(of: person, relativeTo: mePerson, among: universe)
+        } else {
+            role = structural
+        }
+        return FamilyTreePersonCard(
+            person: person,
+            roleLabel: role,
+            showsPartnerCaption: false,
+            isFocused: person.persistentModelID == focusID,
+            isMe: isMe(person),
+            compact: false,
+            onTap: { onFocus(person) },
+            onShowProfile: { onShowProfile(person) },
+            onSetMe: { onSetMe(person) }
+        )
+    }
+
+    private func isMe(_ person: FamilyPerson) -> Bool {
+        guard let mePersonName else { return false }
+        return person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare(mePersonName) == .orderedSame
     }
 }
 
@@ -289,7 +666,7 @@ private struct ParentPartnershipBadge: View {
                 .fill(SimpsonsTheme.orange.opacity(0.45))
                 .frame(width: 24, height: 2)
         }
-        .accessibilityLabel("Parents")
+        .accessibilityLabel("Partners")
     }
 }
 
@@ -304,28 +681,50 @@ private struct TreeConnectorLineDown: View {
 private struct FamilyTreePersonCard: View {
     let person: FamilyPerson
     var roleLabel: String? = nil
+    var showsPartnerCaption: Bool = true
+    var isFocused: Bool = false
+    var isMe: Bool = false
+    var compact: Bool = false
     var onTap: () -> Void
+    var onShowProfile: () -> Void
+    var onSetMe: () -> Void
+
+    private var avatarSize: CGFloat { compact ? 56 : (isFocused ? 88 : 72) }
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 6) {
-                FamilyTreeAvatar(photoData: person.photoData, name: person.name)
-                    .frame(width: 72, height: 72)
+                ZStack(alignment: .topTrailing) {
+                    FamilyTreeAvatar(photoData: person.photoData, name: person.displayName)
+                        .frame(width: avatarSize, height: avatarSize)
+                    if isMe {
+                        Image(systemName: "person.crop.circle.fill")
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, SimpsonsTheme.blue)
+                            .font(.system(size: compact ? 14 : 16))
+                            .offset(x: 4, y: -4)
+                            .accessibilityLabel("This is you")
+                    }
+                }
                 if let roleLabel {
                     Text(roleLabel)
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(SimpsonsTheme.charcoal.opacity(0.55))
+                        .foregroundStyle(
+                            roleLabel == "You"
+                                ? SimpsonsTheme.blue
+                                : SimpsonsTheme.charcoal.opacity(0.55)
+                        )
                 }
-                Text(person.name.isEmpty ? "Name" : person.name)
-                    .font(.caption.weight(.semibold))
+                Text(person.displayName.isEmpty ? "Name" : person.displayName)
+                    .font(isFocused ? .subheadline.weight(.bold) : .caption.weight(.semibold))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
-                    .frame(minWidth: 88, maxWidth: 128)
+                    .frame(minWidth: compact ? 72 : 88, maxWidth: isFocused ? 140 : 128)
                     .foregroundStyle(person.isDeceased ? .secondary : .primary)
                 if person.isDeceased {
                     DeceasedCrossMark(font: .caption.weight(.semibold))
                 }
-                if let partner = person.resolvedPartner {
+                if showsPartnerCaption, let partner = person.resolvedPartner {
                     HStack(spacing: 3) {
                         Image(systemName: "heart.fill")
                             .font(.system(size: 8))
@@ -341,20 +740,13 @@ private struct FamilyTreePersonCard: View {
                     Text("† \(death.formatted(.dateTime.year()))")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
-                        .accessibilityLabel(
-                            String(
-                                format: String(localized: "family_tree.died_on_fmt"),
-                                locale: .current,
-                                death.formatted(.dateTime.month().day().year())
-                            )
-                        )
                 } else if let birth = person.birthDate {
                     Text(birth, format: .dateTime.month(.abbreviated).day())
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(10)
+            .padding(isFocused ? 12 : 10)
             .opacity(person.isDeceased ? 0.85 : 1)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -362,25 +754,39 @@ private struct FamilyTreePersonCard: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(
-                        person.isDeceased
-                            ? Color.secondary.opacity(0.35)
-                            : SimpsonsTheme.orange.opacity(0.4),
-                        lineWidth: 1.5
-                    )
+                    .stroke(borderColor, lineWidth: isFocused ? 2.5 : 1.5)
             )
+            .shadow(color: isFocused ? SimpsonsTheme.orange.opacity(0.25) : .clear, radius: 8, y: 3)
         }
         .buttonStyle(.plain)
+        .accessibilityHint("Double-tap to center this person in the tree")
+        .contextMenu {
+            Button(action: onShowProfile) {
+                Label("View profile", systemImage: "person.crop.circle")
+            }
+            Button(action: onTap) {
+                Label("Center in tree", systemImage: "scope")
+            }
+            Button(action: onSetMe) {
+                Label(isMe ? "This is you" : "This is me", systemImage: "person.fill.checkmark")
+            }
+            .disabled(isMe)
+        }
+    }
+
+    private var borderColor: Color {
+        if isMe { return SimpsonsTheme.blue.opacity(0.85) }
+        if isFocused { return SimpsonsTheme.orange }
+        if person.isDeceased { return Color.secondary.opacity(0.35) }
+        return SimpsonsTheme.orange.opacity(0.4)
     }
 
     private func partnerFirstName(_ partner: FamilyPerson) -> String {
-        let name = partner.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return String(localized: "common.unnamed") }
-        return String(name.split(separator: " ").first ?? Substring(name))
+        let name = partner.displayFirstName
+        return name.isEmpty ? String(localized: "common.unnamed") : name
     }
 }
 
-/// Genealogy-style † mark for deceased people (VoiceOver still says “Deceased”).
 struct DeceasedCrossMark: View {
     var font: Font = .body
 

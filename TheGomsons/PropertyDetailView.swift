@@ -22,6 +22,9 @@ struct PropertyDetailView: View {
     @State private var showAddMaintenance = false
     @State private var maintenanceToEdit: PropertyMaintenanceEntry?
     @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showWifiPassword = false
+    @State private var showAlarmCode = false
+    @State private var showGateCode = false
 
     private var sortedContacts: [PropertyContact] {
         (property.contacts ?? []).sorted {
@@ -69,25 +72,30 @@ struct PropertyDetailView: View {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 220)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 260)
                     .clipped()
             } else {
                 ZStack {
                     LinearGradient(
-                        colors: [Color.blue.opacity(0.25), Color.cyan.opacity(0.15)],
+                        colors: [
+                            Color(hue: 0.58, saturation: 0.42, brightness: 0.62),
+                            Color(hue: 0.72, saturation: 0.38, brightness: 0.42),
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                     VStack(spacing: 8) {
                         Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 36))
-                            .foregroundStyle(.secondary)
-                        Text("Add a photo")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 40, weight: .ultraLight))
+                            .foregroundStyle(.white.opacity(0.55))
+                        Text(String(localized: "property.add_photo"))
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.7))
                     }
                 }
-                .frame(height: 180)
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
             }
 
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
@@ -104,7 +112,7 @@ struct PropertyDetailView: View {
                 Button(role: .destructive) {
                     withAnimation { property.coverImageData = nil }
                 } label: {
-                    Label("Remove photo", systemImage: "trash")
+                    Label(String(localized: "property.remove_photo"), systemImage: "trash")
                 }
             }
         }
@@ -133,74 +141,94 @@ struct PropertyDetailView: View {
     var body: some View {
         List {
             Section {
-                VStack(spacing: 0) {
-                    propertyCoverImage
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("Property name", text: $property.name)
-                            .font(.title2.weight(.bold))
-                        TextField("Address", text: $property.address, axis: .vertical)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1...4)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 4)
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+                propertyCoverImage
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
             }
 
-            Section("Key information") {
-                Picker("Type", selection: $property.propertyKind) {
+            Section {
+                TextField(String(localized: "property.field.name"), text: $property.name)
+                    .font(.title2.weight(.bold))
+                    .textContentType(.name)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+                TextField(String(localized: "property.field.address"), text: $property.address, axis: .vertical)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .textContentType(.fullStreetAddress)
+                    .lineLimit(1...4)
+            } header: {
+                Text(String(localized: "property.rename_section"))
+            } footer: {
+                Text(String(localized: "property.name_edit_footer"))
+            }
+
+            Section {
+                Picker(String(localized: "property.type_picker"), selection: $property.propertyKind) {
                     ForEach(PropertyKind.pickerCases, id: \.self) { kind in
                         Text(kind.displayTitle).tag(kind)
                     }
                 }
+                Picker(String(localized: "property.tenure"), selection: $property.tenureRaw) {
+                    ForEach(PropertyTenure.allCases, id: \.self) { tenure in
+                        Text(tenure.displayTitle).tag(tenure.rawValue)
+                    }
+                }
                 HStack {
-                    Text("Bedrooms")
+                    Text(String(localized: "property.field.bedrooms"))
                     Spacer()
-                    IntZeroAsEmptyField(placeholder: "—", value: $property.bedrooms)
+                    IntZeroAsEmptyField(placeholder: String(localized: "property.number_dash"), value: $property.bedrooms)
                         .frame(maxWidth: 80)
                 }
                 HStack {
-                    Text("Bathrooms")
+                    Text(String(localized: "property.field.bathrooms"))
                     Spacer()
-                    DoubleZeroAsEmptyField(placeholder: "—", value: $property.bathrooms)
+                    DoubleZeroAsEmptyField(placeholder: String(localized: "property.number_dash"), value: $property.bathrooms)
                         .frame(maxWidth: 80)
                 }
                 HStack {
-                    Text("Year built")
+                    Text(String(localized: "property.field.year_built"))
                     Spacer()
-                    IntZeroAsEmptyField(placeholder: "—", value: $property.yearBuilt, maxDigits: 4)
+                    IntZeroAsEmptyField(placeholder: String(localized: "property.number_dash"), value: $property.yearBuilt, maxDigits: 4)
                         .frame(maxWidth: 100)
                 }
-                LabeledContent("Insurance company") {
-                    TextField("Optional", text: $property.insuranceCarrier)
+                LabeledContent(String(localized: "property.field.insurance_company")) {
+                    TextField(String(localized: "common.optional"), text: $property.insuranceCarrier)
                         .multilineTextAlignment(.trailing)
                 }
+            } header: {
+                Text(String(localized: "property.key_info"))
             }
 
-            Section("Wi‑Fi") {
-                LabeledContent("Network") {
-                    TextField("SSID", text: $property.wifiNetwork)
+            if property.isRented {
+                rentalSection
+            }
+
+            Section {
+                LabeledContent(String(localized: "property.field.network")) {
+                    TextField(String(localized: "property.ssid"), text: $property.wifiNetwork)
                         .multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.never)
                 }
-                LabeledContent("Password") {
-                    SecureField("Password", text: $property.wifiPassword)
-                        .multilineTextAlignment(.trailing)
+                LabeledContent(String(localized: "common.password")) {
+                    RevealableSecureField(
+                        placeholder: String(localized: "common.password"),
+                        text: $property.wifiPassword,
+                        isRevealed: $showWifiPassword
+                    )
                 }
+            } header: {
+                Text(String(localized: "property.wifi"))
             }
 
             Section {
                 if sortedEmergencyLines.isEmpty {
-                    Text("Police non-emergency, poison control, building super after hours…")
+                    Text(String(localized: "property.emergency.empty"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedEmergencyLines) { line in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(line.label.isEmpty ? "Unlabeled" : line.label)
+                            Text(line.label.isEmpty ? String(localized: "property.unlabeled") : line.label)
                                 .font(.headline)
                             if !line.phoneNumber.isEmpty {
                                 if let url = TelephoneURL.url(for: line.phoneNumber) {
@@ -219,7 +247,7 @@ struct PropertyDetailView: View {
                             Button(role: .destructive) {
                                 modelContext.delete(line)
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label(String(localized: "common.delete"), systemImage: "trash")
                             }
                         }
                     }
@@ -227,29 +255,31 @@ struct PropertyDetailView: View {
                 Button {
                     showAddEmergencyLine = true
                 } label: {
-                    Label("Add number", systemImage: "cross.case.fill")
+                    Label(String(localized: "property.add_number"), systemImage: "cross.case.fill")
                 }
-                TextField("Medical, egress, breaker panel, gas shutoff…", text: $property.emergencyNotes, axis: .vertical)
+                TextField(String(localized: "property.emergency_field_prompt"), text: $property.emergencyNotes, axis: .vertical)
                     .lineLimit(4 ... 12)
             } header: {
-                Text("Emergency contacts")
+                Text(String(localized: "property.emergency_contacts"))
             } footer: {
-                Text("Dialable numbers above; add context here (medical, egress, breaker panel, gas shutoff…).")
+                Text(String(localized: "property.emergency_footer"))
                     .font(.caption)
             }
 
-            Section("Contact people") {
+            Section {
                 if sortedContacts.isEmpty {
-                    Text("Add a landlord, HOA contact, handyman, or neighbor.")
+                    Text(property.isRented
+                          ? String(localized: "property.contacts.empty_rented")
+                          : String(localized: "property.contact_hint"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedContacts) { contact in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text(contact.name.isEmpty ? "Unnamed contact" : contact.name)
+                                Text(contact.name.isEmpty ? String(localized: "property.contact.unnamed") : contact.name)
                                     .font(.headline)
                                 if contact.isPrimary {
-                                    Text("Primary")
+                                    Text(String(localized: "property.primary"))
                                         .font(.caption2.weight(.semibold))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
@@ -289,7 +319,7 @@ struct PropertyDetailView: View {
                             Button(role: .destructive) {
                                 modelContext.delete(contact)
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                Label(String(localized: "common.delete"), systemImage: "trash")
                             }
                         }
                     }
@@ -297,55 +327,67 @@ struct PropertyDetailView: View {
                 Button {
                     showAddContact = true
                 } label: {
-                    Label("Add contact", systemImage: "person.badge.plus")
+                    Label(String(localized: "property.add_contact"), systemImage: "person.badge.plus")
                 }
+            } header: {
+                Text(String(localized: "property.contact_people"))
             }
 
             Section {
-                Text("Alarm, gate codes, shutoffs, and smart-home notes stay on-device—only share this screen with people you trust.")
+                Text(String(localized: "property.security_footer"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Other systems") {
-                LabeledContent("Alarm / security code") {
-                    SecureField("Optional", text: $property.alarmOrSecurityCode)
-                        .multilineTextAlignment(.trailing)
+            Section {
+                LabeledContent(String(localized: "property.alarm_code")) {
+                    RevealableSecureField(
+                        placeholder: String(localized: "common.optional"),
+                        text: $property.alarmOrSecurityCode,
+                        isRevealed: $showAlarmCode
+                    )
                 }
-                LabeledContent("Gate / door code") {
-                    SecureField("Optional", text: $property.gateOrAccessCode)
-                        .multilineTextAlignment(.trailing)
+                LabeledContent(String(localized: "property.gate_code")) {
+                    RevealableSecureField(
+                        placeholder: String(localized: "common.optional"),
+                        text: $property.gateOrAccessCode,
+                        isRevealed: $showGateCode
+                    )
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Water shutoff")
+                    Text(String(localized: "property.water_shutoff"))
                         .font(.subheadline.weight(.semibold))
-                    TextField("Basement, street valve, unit…", text: $property.waterShutoffLocation, axis: .vertical)
+                    TextField(String(localized: "property.water_shutoff_prompt"), text: $property.waterShutoffLocation, axis: .vertical)
                         .lineLimit(2 ... 5)
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Trash & recycling")
+                    Text(String(localized: "property.trash_recycling"))
                         .font(.subheadline.weight(.semibold))
-                    TextField("Pickup days, cart storage…", text: $property.trashAndRecyclingSchedule, axis: .vertical)
+                    TextField(String(localized: "property.trash_prompt"), text: $property.trashAndRecyclingSchedule, axis: .vertical)
                         .lineLimit(2 ... 4)
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Parking")
+                    Text(String(localized: "property.parking"))
                         .font(.subheadline.weight(.semibold))
-                    TextField("Spots, permits, guest rules…", text: $property.parkingNotes, axis: .vertical)
+                    TextField(String(localized: "property.parking_prompt"), text: $property.parkingNotes, axis: .vertical)
                         .lineLimit(2 ... 5)
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Smart home")
+                    Text(String(localized: "property.smart_home"))
                         .font(.subheadline.weight(.semibold))
-                    TextField("Hubs, apps, automations…", text: $property.smartHomeNotes, axis: .vertical)
+                    TextField(String(localized: "property.smart_home_prompt"), text: $property.smartHomeNotes, axis: .vertical)
                         .lineLimit(2 ... 6)
                 }
+            } header: {
+                Text(String(localized: "property.other_systems"))
             }
 
             // MARK: Contractors
             Section {
                 if contractorsByTrade.isEmpty {
-                    Text("Electricians, plumbers, carpenters, handymen…")
+                    Text(property.isRented
+                          ? String(localized: "property.contractors.empty_rented")
+                          : String(localized: "property.contractors.empty"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(contractorsByTrade, id: \.trade) { group in
@@ -356,7 +398,7 @@ struct PropertyDetailView: View {
                                         Button(role: .destructive) {
                                             modelContext.delete(contractor)
                                         } label: {
-                                            Label("Delete", systemImage: "trash")
+                                            Label(String(localized: "common.delete"), systemImage: "trash")
                                         }
                                     }
                             }
@@ -369,16 +411,29 @@ struct PropertyDetailView: View {
                 Button {
                     showAddContractor = true
                 } label: {
-                    Label("Add contractor", systemImage: "hammer.fill")
+                    Label(
+                        property.isRented
+                            ? String(localized: "property.add_repair_contact")
+                            : String(localized: "property.add_contractor"),
+                        systemImage: "hammer.fill"
+                    )
                 }
             } header: {
-                Text("Contractors")
+                Text(property.isRented
+                      ? String(localized: "property.repair_contacts")
+                      : String(localized: "property.contractors"))
+            } footer: {
+                if property.isRented {
+                    Text(String(localized: "property.contractors.hint_rented"))
+                } else {
+                    Text(String(localized: "property.contractors.hint"))
+                }
             }
 
             // MARK: Service providers
             Section {
                 if providersByKind.isEmpty {
-                    Text("Electricity company, internet, public services…")
+                    Text(String(localized: "property.providers.hint"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(providersByKind, id: \.kind) { group in
@@ -389,7 +444,7 @@ struct PropertyDetailView: View {
                                         Button(role: .destructive) {
                                             modelContext.delete(provider)
                                         } label: {
-                                            Label("Delete", systemImage: "trash")
+                                            Label(String(localized: "common.delete"), systemImage: "trash")
                                         }
                                     }
                             }
@@ -402,29 +457,31 @@ struct PropertyDetailView: View {
                 Button {
                     showAddServiceProvider = true
                 } label: {
-                    Label("Add service provider", systemImage: "building.2.fill")
+                    Label(String(localized: "property.add_provider"), systemImage: "building.2.fill")
                 }
             } header: {
-                Text("Service providers")
+                Text(String(localized: "property.service_providers"))
             }
 
-            Section("More details") {
+            Section {
                 HStack {
-                    Text("Living area (m²)")
+                    Text(String(localized: "property.living_area"))
                     Spacer()
-                    IntZeroAsEmptyField(placeholder: "—", value: $property.livingAreaSqFt)
+                    IntZeroAsEmptyField(placeholder: String(localized: "property.number_dash"), value: $property.livingAreaSqFt)
                         .frame(maxWidth: 100)
                 }
-                LabeledContent("Insurance policy #") {
-                    TextField("Optional", text: $property.insurancePolicyNumber)
+                LabeledContent(String(localized: "property.insurance_policy")) {
+                    TextField(String(localized: "common.optional"), text: $property.insurancePolicyNumber)
                         .multilineTextAlignment(.trailing)
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Utilities & accounts")
+                    Text(String(localized: "property.utilities_accounts"))
                         .font(.subheadline.weight(.semibold))
-                    TextField("Gas, electric, water, internet account hints…", text: $property.utilitiesNotes, axis: .vertical)
+                    TextField(String(localized: "property.utilities_prompt"), text: $property.utilitiesNotes, axis: .vertical)
                         .lineLimit(3 ... 8)
                 }
+            } header: {
+                Text(String(localized: "property.more_details"))
             }
 
             Section {
@@ -567,9 +624,19 @@ struct PropertyDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Details")
+        .navigationTitle(
+            property.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? String(localized: "property.detail.title")
+                : property.name
+        )
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(.systemGroupedBackground))
+        .onChange(of: property.name) { _, _ in
+            persistPropertyEdits()
+        }
+        .onDisappear {
+            persistPropertyEdits()
+        }
         .sheet(isPresented: $showAddContact) {
             AddPropertyContactSheet(property: property)
         }
@@ -622,6 +689,109 @@ struct PropertyDetailView: View {
             loadPhoto(from: newItem)
         }
     }
+
+    private func persistPropertyEdits() {
+        do {
+            try modelContext.save()
+        } catch {
+            print("[TheGomsons] Failed to save property edits: \(error.localizedDescription)")
+        }
+    }
+
+    @ViewBuilder
+    private var rentalSection: some View {
+        Section {
+            TextField(String(localized: "property.rental.landlord"), text: $property.landlordOrOwnerName)
+                .textContentType(.name)
+            TextField(String(localized: "property.rental.company"), text: $property.rentalCompanyName)
+                .textContentType(.organizationName)
+            TextField(String(localized: "property.rental.company_phone"), text: $property.rentalCompanyPhone)
+                .textContentType(.telephoneNumber)
+                .keyboardType(.phonePad)
+            if !property.rentalCompanyPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let url = TelephoneURL.url(for: property.rentalCompanyPhone) {
+                Link(destination: url) {
+                    Label(property.rentalCompanyPhone, systemImage: "phone.fill")
+                }
+            }
+            TextField(String(localized: "property.rental.company_email"), text: $property.rentalCompanyEmail)
+                .textContentType(.emailAddress)
+                .keyboardType(.emailAddress)
+                .textInputAutocapitalization(.never)
+            if !property.rentalCompanyEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               let mailURL = URL(string: "mailto:\(property.rentalCompanyEmail)") {
+                Link(destination: mailURL) {
+                    Label(property.rentalCompanyEmail, systemImage: "envelope.fill")
+                }
+            }
+
+            LabeledContent(String(localized: "property.rental.deposit")) {
+                TextField(String(localized: "property.rental.amount_placeholder"), text: $property.depositAmount)
+                    .multilineTextAlignment(.trailing)
+            }
+            LabeledContent(String(localized: "property.rental.monthly_rent")) {
+                TextField(String(localized: "property.rental.amount_placeholder"), text: $property.monthlyRent)
+                    .multilineTextAlignment(.trailing)
+            }
+
+            Toggle(String(localized: "property.rental.lease_start"), isOn: leaseStartEnabled)
+            if property.leaseStartDate != nil {
+                DatePicker(
+                    String(localized: "property.rental.lease_start"),
+                    selection: leaseStartBinding,
+                    displayedComponents: .date
+                )
+            }
+            Toggle(String(localized: "property.rental.lease_end"), isOn: leaseEndEnabled)
+            if property.leaseEndDate != nil {
+                DatePicker(
+                    String(localized: "property.rental.lease_end"),
+                    selection: leaseEndBinding,
+                    displayedComponents: .date
+                )
+            }
+
+            TextField(String(localized: "property.rental.contract_ref"), text: $property.rentalContractReference)
+            TextField(
+                String(localized: "property.rental.contract_notes"),
+                text: $property.rentalContractNotes,
+                axis: .vertical
+            )
+            .lineLimit(3 ... 10)
+        } header: {
+            Text(String(localized: "property.rental.section"))
+        } footer: {
+            Text(String(localized: "property.rental.footer"))
+        }
+    }
+
+    private var leaseStartEnabled: Binding<Bool> {
+        Binding(
+            get: { property.leaseStartDate != nil },
+            set: { property.leaseStartDate = $0 ? (property.leaseStartDate ?? Date()) : nil }
+        )
+    }
+
+    private var leaseStartBinding: Binding<Date> {
+        Binding(
+            get: { property.leaseStartDate ?? Date() },
+            set: { property.leaseStartDate = $0 }
+        )
+    }
+
+    private var leaseEndEnabled: Binding<Bool> {
+        Binding(
+            get: { property.leaseEndDate != nil },
+            set: { property.leaseEndDate = $0 ? (property.leaseEndDate ?? Date()) : nil }
+        )
+    }
+
+    private var leaseEndBinding: Binding<Date> {
+        Binding(
+            get: { property.leaseEndDate ?? Date() },
+            set: { property.leaseEndDate = $0 }
+        )
+    }
 }
 
 private enum TelephoneURL {
@@ -631,6 +801,41 @@ private enum TelephoneURL {
         let digits = trimmed.filter { $0.isNumber || $0 == "+" }
         guard digits.count >= 3 else { return nil }
         return URL(string: "tel:" + digits)
+    }
+}
+
+/// Secure text that stays masked until the eye button is tapped.
+private struct RevealableSecureField: View {
+    var placeholder: String
+    @Binding var text: String
+    @Binding var isRevealed: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Group {
+                if isRevealed {
+                    TextField(placeholder, text: $text)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } else {
+                    SecureField(placeholder, text: $text)
+                }
+            }
+            .multilineTextAlignment(.trailing)
+
+            Button {
+                isRevealed.toggle()
+            } label: {
+                Image(systemName: isRevealed ? "eye.slash" : "eye")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                isRevealed
+                    ? String(localized: "common.hide_secret")
+                    : String(localized: "common.show_secret")
+            )
+        }
     }
 }
 
@@ -647,22 +852,28 @@ struct AddPropertyContactSheet: View {
     @State private var notes = ""
     @State private var isPrimary = false
 
-    private let roleSuggestions = [
-        "Landlord",
-        "HOA / board",
-        "Property manager",
-        "Building super",
-        "Neighbor",
-        "Insurance agent",
-        "Plumber / HVAC",
-    ]
+    private var roleSuggestions: [String] {
+        [
+            String(localized: "property.role.landlord"),
+            String(localized: "property.role.hoa"),
+            String(localized: "property.role.manager"),
+            String(localized: "property.role.super"),
+            String(localized: "property.role.neighbor"),
+            String(localized: "property.role.insurance"),
+            String(localized: "property.role.plumber"),
+        ]
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Person") {
-                    TextField("Name", text: $name)
-                    TextField("Role", text: $role, prompt: Text("Landlord, HOA, neighbor…"))
+                Section(String(localized: "property.contact.person")) {
+                    TextField(String(localized: "common.name"), text: $name)
+                    TextField(
+                        String(localized: "property.person.role"),
+                        text: $role,
+                        prompt: Text(String(localized: "property.person.role_prompt"))
+                    )
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(roleSuggestions, id: \.self) { suggestion in
@@ -678,29 +889,29 @@ struct AddPropertyContactSheet: View {
                         .padding(.vertical, 4)
                     }
                 }
-                Section("Reach them") {
-                    TextField("Phone", text: $phone)
+                Section(String(localized: "property.contact.reach")) {
+                    TextField(String(localized: "common.phone"), text: $phone)
                         .keyboardType(.phonePad)
-                    TextField("Email", text: $email)
+                    TextField(String(localized: "common.email"), text: $email)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                 }
-                Section("Notes") {
-                    TextField("Gate fob, hours, languages…", text: $notes, axis: .vertical)
+                Section(String(localized: "common.notes")) {
+                    TextField(String(localized: "property.contact.notes_prompt"), text: $notes, axis: .vertical)
                         .lineLimit(2 ... 6)
                 }
                 Section {
-                    Toggle("Primary contact for this property", isOn: $isPrimary)
+                    Toggle(String(localized: "property.contact.primary_toggle"), isOn: $isPrimary)
                 }
             }
-            .navigationTitle("New contact")
+            .navigationTitle(String(localized: "property.contact.new"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(String(localized: "common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(String(localized: "common.add")) {
                         let nextOrder = ((property.contacts ?? []).map(\.sortOrder).max() ?? -1) + 1
                         if isPrimary {
                             for c in (property.contacts ?? []) where c.isPrimary {
@@ -737,23 +948,36 @@ struct AddPropertyEmergencyLineSheet: View {
     @State private var label = ""
     @State private var phoneNumber = ""
 
-    private let presets = [
-        ("Police (non-emergency)", ""),
-        ("Fire / EMS (local)", ""),
-        ("Poison control", "1-800-222-1222"),
-        ("Building after-hours", ""),
-        ("Utility gas leak", ""),
-    ]
+    private var poisonControlNumber: String {
+        if Locale.current.language.languageCode?.identifier == "nb" {
+            return "22 59 13 00"
+        }
+        return "1-800-222-1222"
+    }
+
+    private var presets: [(String, String)] {
+        [
+            (String(localized: "property.emergency.preset.police"), ""),
+            (String(localized: "property.emergency.preset.fire"), ""),
+            (String(localized: "property.emergency.preset.poison"), poisonControlNumber),
+            (String(localized: "property.emergency.preset.building"), ""),
+            (String(localized: "property.emergency.preset.gas"), ""),
+        ]
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Number") {
-                    TextField("Label", text: $label, prompt: Text("e.g. Police non-emergency"))
-                    TextField("Phone", text: $phoneNumber)
+                Section(String(localized: "property.emergency.number_section")) {
+                    TextField(
+                        String(localized: "property.emergency.label"),
+                        text: $label,
+                        prompt: Text(String(localized: "property.emergency.label_prompt"))
+                    )
+                    TextField(String(localized: "common.phone"), text: $phoneNumber)
                         .keyboardType(.phonePad)
                 }
-                Section("Quick add") {
+                Section(String(localized: "property.emergency.quick")) {
                     ForEach(presets, id: \.0) { preset in
                         Button {
                             label = preset.0
@@ -772,14 +996,14 @@ struct AddPropertyEmergencyLineSheet: View {
                     }
                 }
             }
-            .navigationTitle("Emergency number")
+            .navigationTitle(String(localized: "property.emergency.new"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(String(localized: "common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(String(localized: "common.add")) {
                         let nextOrder = ((property.emergencyLines ?? []).map(\.sortOrder).max() ?? -1) + 1
                         let line = PropertyEmergencyLine(
                             label: label,
@@ -805,7 +1029,7 @@ private struct ContractorRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(contractor.name.isEmpty ? "Unnamed" : contractor.name)
+            Text(contractor.name.isEmpty ? String(localized: "common.unnamed") : contractor.name)
                 .font(.headline)
             if !contractor.phone.isEmpty {
                 if let url = TelephoneURL.url(for: contractor.phone) {
@@ -849,10 +1073,13 @@ private struct ServiceProviderRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(provider.companyName.isEmpty ? "Unnamed" : provider.companyName)
+            Text(provider.companyName.isEmpty ? String(localized: "common.unnamed") : provider.companyName)
                 .font(.headline)
             if !provider.accountNumber.isEmpty {
-                Label("Acct: \(provider.accountNumber)", systemImage: "number")
+                Label(
+                    String(format: String(localized: "property.account_fmt"), locale: .current, provider.accountNumber),
+                    systemImage: "number"
+                )
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
@@ -911,38 +1138,38 @@ struct AddPropertyContractorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Trade") {
-                    Picker("Trade", selection: $trade) {
+                Section(String(localized: "property.trade")) {
+                    Picker(String(localized: "property.trade"), selection: $trade) {
                         ForEach(ContractorTrade.allCases, id: \.self) { t in
                             Label(t.displayTitle, systemImage: t.systemImage).tag(t)
                         }
                     }
                     .pickerStyle(.menu)
                 }
-                Section("Details") {
-                    TextField("Name / company", text: $name)
-                    TextField("Phone", text: $phone)
+                Section(String(localized: "property.details")) {
+                    TextField(String(localized: "property.contractor.name_company"), text: $name)
+                    TextField(String(localized: "common.phone"), text: $phone)
                         .keyboardType(.phonePad)
-                    TextField("Email", text: $email)
+                    TextField(String(localized: "common.email"), text: $email)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
-                    TextField("Website", text: $website)
+                    TextField(String(localized: "property.website"), text: $website)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                 }
-                Section("Notes") {
-                    TextField("Availability, pricing, ratings…", text: $notes, axis: .vertical)
+                Section(String(localized: "common.notes")) {
+                    TextField(String(localized: "property.contractor.notes_prompt"), text: $notes, axis: .vertical)
                         .lineLimit(2 ... 6)
                 }
             }
-            .navigationTitle("New contractor")
+            .navigationTitle(String(localized: "property.contractor.new"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(String(localized: "common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(String(localized: "common.add")) {
                         let nextOrder = ((property.contractors ?? []).map(\.sortOrder).max() ?? -1) + 1
                         let contractor = PropertyContractor(
                             name: name,
@@ -984,40 +1211,40 @@ struct AddPropertyServiceProviderSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Type") {
-                    Picker("Category", selection: $kind) {
+                Section(String(localized: "property.provider.type")) {
+                    Picker(String(localized: "property.category"), selection: $kind) {
                         ForEach(ServiceProviderKind.allCases, id: \.self) { k in
                             Label(k.displayTitle, systemImage: k.systemImage).tag(k)
                         }
                     }
                     .pickerStyle(.menu)
                 }
-                Section("Details") {
-                    TextField("Company name", text: $companyName)
-                    TextField("Account number", text: $accountNumber)
+                Section(String(localized: "property.details")) {
+                    TextField(String(localized: "property.company_name"), text: $companyName)
+                    TextField(String(localized: "property.account_number"), text: $accountNumber)
                         .textInputAutocapitalization(.never)
-                    TextField("Phone", text: $phone)
+                    TextField(String(localized: "common.phone"), text: $phone)
                         .keyboardType(.phonePad)
-                    TextField("Email", text: $email)
+                    TextField(String(localized: "common.email"), text: $email)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
-                    TextField("Website / portal URL", text: $website)
+                    TextField(String(localized: "property.website_portal"), text: $website)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                 }
-                Section("Notes") {
-                    TextField("Login hints, billing cycle, contact person…", text: $notes, axis: .vertical)
+                Section(String(localized: "common.notes")) {
+                    TextField(String(localized: "property.provider.notes_prompt"), text: $notes, axis: .vertical)
                         .lineLimit(2 ... 6)
                 }
             }
-            .navigationTitle("New service provider")
+            .navigationTitle(String(localized: "property.provider.new"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(String(localized: "common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button(String(localized: "common.add")) {
                         let nextOrder = ((property.serviceProviders ?? []).map(\.sortOrder).max() ?? -1) + 1
                         let provider = PropertyServiceProvider(
                             companyName: companyName,

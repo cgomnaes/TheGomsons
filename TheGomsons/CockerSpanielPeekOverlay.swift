@@ -24,6 +24,32 @@ private enum PeekReveal {
     }
 }
 
+/// Shared cadence so Bluee doesn’t reappear every few seconds or after every tab change.
+private enum CockerPeekTiming {
+    /// Minimum gap between peeks (survives section switches / view restarts).
+    static let minimumGap: TimeInterval = 4 * 60
+    /// Extra wait before the first peek after launch / returning with news.
+    static let firstPeekDelayRange: ClosedRange<Double> = 45...90
+    /// Wait after a peek finishes before the next one may start (on top of minimumGap).
+    static let betweenPeeksRange: ClosedRange<Double> = 3 * 60...6 * 60
+    /// How long the dog (and bubble) stay on screen.
+    static let onScreenWithNewsRange: ClosedRange<Double> = 6...10
+    static let onScreenIdleRange: ClosedRange<Double> = 2.5...4
+
+    private static let lastPeekKey = "TheGomsons.CockerPeek.lastShownAt"
+
+    static var secondsUntilAllowed: TimeInterval {
+        let last = UserDefaults.standard.double(forKey: lastPeekKey)
+        guard last > 0 else { return 0 }
+        let elapsed = Date().timeIntervalSince1970 - last
+        return max(0, minimumGap - elapsed)
+    }
+
+    static func markPeekShown() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastPeekKey)
+    }
+}
+
 struct CockerSpanielPeekOverlay: View {
     var isSuppressed: Bool
     var newsItems: [CockerNewsItem] = []
@@ -147,6 +173,7 @@ struct CockerSpanielPeekOverlay: View {
 
     private func newsBubble(_ news: CockerNewsItem, maxWidth: CGFloat) -> some View {
         Button {
+            CockerPeekTiming.markPeekShown()
             onOpenNews?(news)
         } label: {
             Text(news.message)
@@ -179,11 +206,32 @@ struct CockerSpanielPeekOverlay: View {
 
     @MainActor
     private func peekLoop() async {
+        var isFirstCycle = true
         while !Task.isCancelled {
-            let hidden = newsItems.isEmpty
-                ? Double.random(in: 16...42)
-                : Double.random(in: 8...22)
+            // Honor shared cooldown first (tab changes used to restart the loop and peek again immediately).
+            let cooldown = CockerPeekTiming.secondsUntilAllowed
+            if cooldown > 0.5 {
+                guard await sleepUnlessCancelled(seconds: cooldown) else { break }
+            }
+
+            let hidden: Double
+            if isFirstCycle {
+                hidden = Double.random(in: CockerPeekTiming.firstPeekDelayRange)
+                isFirstCycle = false
+            } else if newsItems.isEmpty {
+                // Idle peeks (no news) stay rare.
+                hidden = Double.random(in: 4 * 60...8 * 60)
+            } else {
+                hidden = Double.random(in: CockerPeekTiming.betweenPeeksRange)
+            }
             guard await sleepUnlessCancelled(seconds: hidden) else { break }
+
+            // Re-check cooldown after the wait (another overlay instance may have peeked).
+            let remaining = CockerPeekTiming.secondsUntilAllowed
+            if remaining > 0.5 {
+                guard await sleepUnlessCancelled(seconds: remaining) else { break }
+                continue
+            }
 
             let nextCorner = PeekCorner.allCases.randomElement() ?? .bottomTrailing
             let nextVariant = Int.random(in: 0..<12)
@@ -205,10 +253,11 @@ struct CockerSpanielPeekOverlay: View {
                 activeNews = nextNews
                 isVisible = true
             }
+            CockerPeekTiming.markPeekShown()
 
             let onScreen = nextNews == nil
-                ? Double.random(in: 2.0...4.5)
-                : Double.random(in: 4.5...7.5)
+                ? Double.random(in: CockerPeekTiming.onScreenIdleRange)
+                : Double.random(in: CockerPeekTiming.onScreenWithNewsRange)
             guard await sleepUnlessCancelled(seconds: onScreen) else {
                 withAnimation(.easeOut(duration: 0.2)) {
                     isVisible = false

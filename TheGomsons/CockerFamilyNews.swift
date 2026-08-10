@@ -36,7 +36,7 @@ enum CockerFamilyNews {
 
         for person in people where !person.isDeceased && person.includeBirthdayOnCalendar {
             guard let days = person.daysUntilNextBirthday(after: now), days <= 14 else { continue }
-            let name = person.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = person.displayName
             guard !name.isEmpty else { continue }
             let message: String
             if days == 0 {
@@ -83,7 +83,7 @@ enum CockerFamilyNews {
             guard expiry > epoch else { continue }
             let day = cal.startOfDay(for: expiry)
             let days = cal.dateComponents([.day], from: today, to: day).day ?? 999
-            guard days >= 0, days <= 60 else { continue }
+            guard days >= 0, days <= 30 else { continue }
             let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { continue }
             let message: String

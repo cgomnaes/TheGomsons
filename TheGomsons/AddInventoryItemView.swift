@@ -223,15 +223,20 @@ struct AddInventoryItemView: View {
         Section {
             TextField(String(localized: "common.name"), text: $name)
                 .font(.body.weight(.medium))
-            Picker(String(localized: "common.category"), selection: $category) {
-                ForEach(InventoryStashSection.allCases, id: \.self) { section in
-                    Section(section.title) {
-                        ForEach(section.categories, id: \.self) { cat in
-                            Text(cat.displayTitle).tag(cat)
-                        }
-                    }
+            // Form `Picker` + nested sections auto-scrolls to the selection and then
+            // fights upward scrolling (esp. when default is `.other` at the bottom).
+            NavigationLink {
+                InventoryCategoryPickerView(selection: $category)
+            } label: {
+                HStack {
+                    Text(String(localized: "common.category"))
+                    Spacer()
+                    Text(category.displayTitle)
+                        .foregroundStyle(.secondary)
                 }
             }
+            .accessibilityLabel(String(localized: "common.category"))
+            .accessibilityValue(category.displayTitle)
         }
     }
 
@@ -672,6 +677,45 @@ struct AddInventoryItemView: View {
         } catch {
             print("[TheGomsons] Failed to save belonging: \(error.localizedDescription)")
         }
+    }
+}
+
+/// Belongings category chooser. Avoids Form `Picker`’s scroll-to-selection tug-of-war.
+struct InventoryCategoryPickerView: View {
+    @Binding var selection: InventoryCategory
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        List {
+            ForEach(InventoryStashSection.allCases, id: \.self) { section in
+                Section(section.title) {
+                    ForEach(section.categories, id: \.self) { cat in
+                        Button {
+                            selection = cat
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Text(cat.displayTitle)
+                                    .foregroundStyle(.primary)
+                                Spacer(minLength: 8)
+                                if cat == selection {
+                                    Image(systemName: "checkmark")
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(SimpsonsTheme.blue)
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .accessibilityAddTraits(cat == selection ? .isSelected : [])
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle(String(localized: "common.category"))
+        .navigationBarTitleDisplayMode(.inline)
+        // Do not scroll-to-selection on appear — that was the original bug.
     }
 }
 

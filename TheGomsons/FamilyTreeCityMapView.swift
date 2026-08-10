@@ -43,11 +43,11 @@ struct FamilyTreeCityMapView: View {
                     ForEach(mappablePeople, id: \.persistentModelID) { person in
                         if let lat = person.cityLatitude, let lon = person.cityLongitude {
                             let coord = CLLocationCoordinate2D(latitude: lat, longitude: lon)
-                            Annotation(person.name.isEmpty ? person.city : person.name, coordinate: coord) {
+                            Annotation(person.displayName.isEmpty ? person.city : person.displayName, coordinate: coord) {
                                 VStack(spacing: 4) {
-                                    FamilyTreeMapAvatar(photoData: person.photoData, name: person.name)
+                                    FamilyTreeMapAvatar(photoData: person.photoData, name: person.displayName)
                                         .frame(width: 40, height: 40)
-                                    Text(person.name.isEmpty ? String(localized: "common.untitled") : person.name)
+                                    Text(person.displayName.isEmpty ? String(localized: "common.untitled") : person.displayName)
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(.primary)
                                         .lineLimit(1)

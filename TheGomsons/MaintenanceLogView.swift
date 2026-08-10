@@ -241,103 +241,18 @@ struct MaintenanceEntryEditorView: View {
 
     var body: some View {
         Form {
-            Section {
-                TextField(String(localized: "maintenance.title_field"), text: $title)
-                Picker(String(localized: "common.category"), selection: $category) {
-                    ForEach(MaintenanceCategory.allCases, id: \.self) { cat in
-                        Label(cat.displayTitle, systemImage: cat.systemImage).tag(cat)
-                    }
-                }
-                DatePicker(String(localized: "maintenance.performed_at"), selection: $performedAt, displayedComponents: .date)
-                TextField(String(localized: "maintenance.performed_by"), text: $performedBy)
-                HStack {
-                    Text(String(localized: "maintenance.cost"))
-                    Spacer()
-                    TextField("0", value: $costAmount, format: .number)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 120)
-                }
-            }
-
-            Section {
-                Picker(String(localized: "maintenance.property"), selection: $selectedProperty) {
-                    Text(String(localized: "maintenance.property_required"))
-                        .tag(nil as Property?)
-                    ForEach(activeProperties) { property in
-                        Text(property.name.isEmpty ? String(localized: "property.unnamed") : property.name)
-                            .tag(property as Property?)
-                    }
-                }
-            } header: {
-                Text(String(localized: "maintenance.place_section"))
-            } footer: {
-                Text(String(localized: "maintenance.place_footer"))
-            }
-
-            Section {
-                Toggle(String(localized: "maintenance.has_next_due"), isOn: $hasNextDue)
-                if hasNextDue {
-                    DatePicker(String(localized: "maintenance.next_due"), selection: $nextDueAt, displayedComponents: .date)
-                }
-            } header: {
-                Text(String(localized: "maintenance.schedule_section"))
-            }
-
-            Section(String(localized: "common.notes")) {
-                TextField(String(localized: "maintenance.notes_placeholder"), text: $notes, axis: .vertical)
-                    .lineLimit(3 ... 10)
-            }
-
-            Section(String(localized: "maintenance.photo")) {
-                if let pickedImage {
-                    Image(uiImage: pickedImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    Button(role: .destructive) {
-                        pickedImage = nil
-                        pickerItem = nil
-                    } label: {
-                        Text(String(localized: "maintenance.remove_photo"))
-                    }
-                }
-                PhotosPicker(selection: $pickerItem, matching: .images) {
-                    Label(
-                        pickedImage == nil
-                            ? String(localized: "maintenance.add_photo")
-                            : String(localized: "maintenance.change_photo"),
-                        systemImage: "camera.fill"
-                    )
-                }
-            }
-
+            basicsSection
+            placeSection
+            scheduleSection
+            notesSection
+            photoSection
             if !isNew {
-                Section {
-                    Button(role: .destructive) {
-                        confirmDelete = true
-                    } label: {
-                        Text(String(localized: "maintenance.delete"))
-                    }
-                }
+                deleteSection
             }
         }
         .navigationTitle(isNew ? String(localized: "maintenance.new") : String(localized: "maintenance.edit"))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button(String(localized: "common.cancel")) { dismiss() }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button(String(localized: "common.save")) { save() }
-                    .fontWeight(.semibold)
-                    .disabled(
-                        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            || selectedProperty == nil
-                    )
-            }
-        }
+        .toolbar { editorToolbar }
         .onAppear(perform: load)
         .onChange(of: pickerItem) { _, newItem in
             Task { await loadPhoto(from: newItem) }
@@ -347,15 +262,144 @@ struct MaintenanceEntryEditorView: View {
             isPresented: $confirmDelete,
             titleVisibility: .visible
         ) {
-            Button(String(localized: "common.delete"), role: .destructive) {
-                if let entry = entryToEdit {
-                    modelContext.delete(entry)
-                    try? modelContext.save()
-                }
-                dismiss()
-            }
+            Button(String(localized: "common.delete"), role: .destructive, action: deleteAndDismiss)
             Button(String(localized: "common.cancel"), role: .cancel) {}
         }
+    }
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedProperty != nil
+    }
+
+    @ToolbarContentBuilder
+    private var editorToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button(String(localized: "common.cancel")) { dismiss() }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+            Button(String(localized: "common.save")) { save() }
+                .fontWeight(.semibold)
+                .disabled(!canSave)
+        }
+    }
+
+    @ViewBuilder
+    private var basicsSection: some View {
+        Section {
+            TextField(String(localized: "maintenance.title_field"), text: $title)
+            Picker(String(localized: "common.category"), selection: $category) {
+                ForEach(MaintenanceCategory.allCases, id: \.self) { cat in
+                    Label(cat.displayTitle, systemImage: cat.systemImage).tag(cat)
+                }
+            }
+            DatePicker(
+                String(localized: "maintenance.performed_at"),
+                selection: $performedAt,
+                displayedComponents: .date
+            )
+            TextField(String(localized: "maintenance.performed_by"), text: $performedBy)
+            costRow
+        }
+    }
+
+    private var costRow: some View {
+        HStack {
+            Text(String(localized: "maintenance.cost"))
+            Spacer()
+            TextField("0", value: $costAmount, format: .number)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 120)
+        }
+    }
+
+    @ViewBuilder
+    private var placeSection: some View {
+        Section {
+            Picker(String(localized: "maintenance.property"), selection: $selectedProperty) {
+                Text(String(localized: "maintenance.property_required"))
+                    .tag(nil as Property?)
+                ForEach(activeProperties) { property in
+                    Text(property.name.isEmpty ? String(localized: "property.unnamed") : property.name)
+                        .tag(property as Property?)
+                }
+            }
+        } header: {
+            Text(String(localized: "maintenance.place_section"))
+        } footer: {
+            Text(String(localized: "maintenance.place_footer"))
+        }
+    }
+
+    @ViewBuilder
+    private var scheduleSection: some View {
+        Section {
+            Toggle(String(localized: "maintenance.has_next_due"), isOn: $hasNextDue)
+            if hasNextDue {
+                DatePicker(
+                    String(localized: "maintenance.next_due"),
+                    selection: $nextDueAt,
+                    displayedComponents: .date
+                )
+            }
+        } header: {
+            Text(String(localized: "maintenance.schedule_section"))
+        }
+    }
+
+    @ViewBuilder
+    private var notesSection: some View {
+        Section(String(localized: "common.notes")) {
+            TextField(String(localized: "maintenance.notes_placeholder"), text: $notes, axis: .vertical)
+                .lineLimit(3 ... 10)
+        }
+    }
+
+    @ViewBuilder
+    private var photoSection: some View {
+        Section(String(localized: "maintenance.photo")) {
+            if let pickedImage {
+                Image(uiImage: pickedImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Button(role: .destructive) {
+                    self.pickedImage = nil
+                    pickerItem = nil
+                } label: {
+                    Text(String(localized: "maintenance.remove_photo"))
+                }
+            }
+            PhotosPicker(selection: $pickerItem, matching: .images) {
+                Label(photoPickerLabel, systemImage: "camera.fill")
+            }
+        }
+    }
+
+    private var photoPickerLabel: String {
+        pickedImage == nil
+            ? String(localized: "maintenance.add_photo")
+            : String(localized: "maintenance.change_photo")
+    }
+
+    @ViewBuilder
+    private var deleteSection: some View {
+        Section {
+            Button(role: .destructive) {
+                confirmDelete = true
+            } label: {
+                Text(String(localized: "maintenance.delete"))
+            }
+        }
+    }
+
+    private func deleteAndDismiss() {
+        if let entry = entryToEdit {
+            modelContext.delete(entry)
+            try? modelContext.save()
+        }
+        dismiss()
     }
 
     private func load() {
@@ -364,7 +408,9 @@ struct MaintenanceEntryEditorView: View {
             category = entry.category
             performedAt = entry.performedAt > Date(timeIntervalSince1970: 0) ? entry.performedAt : Date()
             hasNextDue = entry.hasNextDue
-            nextDueAt = entry.hasNextDue ? entry.nextDueAt : (Calendar.current.date(byAdding: .month, value: 12, to: Date()) ?? Date())
+            nextDueAt = entry.hasNextDue
+                ? entry.nextDueAt
+                : (Calendar.current.date(byAdding: .month, value: 12, to: Date()) ?? Date())
             performedBy = entry.performedBy
             costAmount = entry.costAmount
             notes = entry.notes

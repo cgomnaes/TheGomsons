@@ -2,7 +2,7 @@
 //  FamilyTreeCSVImport.swift
 //  TheGomsons
 //
-//  UTF-8 CSV template: name, dob, relation, email, mobile, partner_name, partner_status, note, city, hobbies, deceased, death_date, sibling_names
+//  UTF-8 CSV template: name, preferred_name, dob, relation, email, mobile, partner_name, partner_status, note, city, hobbies, deceased, death_date, sibling_names
 //
 
 import Foundation
@@ -12,14 +12,14 @@ enum FamilyTreeCSVImport {
 
     /// Exact header (order) for the bundled template; columns may appear in any order in user files.
     static let templateHeaderLine =
-        "name,dob,relation,email,mobile,partner_name,partner_status,note,city,hobbies,deceased,death_date,sibling_names"
+        "name,preferred_name,dob,relation,email,mobile,partner_name,partner_status,note,city,hobbies,deceased,death_date,sibling_names"
 
     static var templateFileContents: String {
         """
         \(templateHeaderLine)
-        Ada Gomnaes,1990-05-12,ourHousehold,ada@example.com,+47 900 00 000,Ola Gomnaes,married,,"Oslo","Hiking, cooking",,,
-        Ola Gomnaes,1988-03-01,ourHousehold,ola@example.com,+47 900 00 001,Ada Gomnaes,married,,"Oslo","Football, photography",,,
-        Ingrid Berg,1960-11-20,myParentsLine,,+47 400 00 000,,,Mother,,"Bergen","Gardening",,,
+        Ada Gomnaes,Ada,1990-05-12,ourHousehold,ada@example.com,+47 900 00 000,Ola Gomnaes,married,,"Oslo","Hiking, cooking",,,
+        Ola Gomnaes,,1988-03-01,ourHousehold,ola@example.com,+47 900 00 001,Ada Gomnaes,married,,"Oslo","Football, photography",,,
+        Ingrid Berg,Ingrid,1960-11-20,myParentsLine,,+47 400 00 000,,,Mother,,"Bergen","Gardening",,,
         """
     }
 
@@ -53,6 +53,7 @@ enum FamilyTreeCSVImport {
         }
 
         let dobIdx = col("dob", "date_of_birth", "birthdate", "birth_date")
+        let preferredNameIdx = col("preferred_name", "nickname", "preferred", "goes_by")
         let relationIdx = col("relation", "branch")
         let emailIdx = col("email", "e_mail")
         let mobileIdx = col("mobile", "phone", "cell", "cellphone")
@@ -98,6 +99,7 @@ enum FamilyTreeCSVImport {
             }
 
             let dobStr = dobIdx.flatMap { $0 < cells.count ? cells[$0] : nil } ?? ""
+            let preferredName = preferredNameIdx.flatMap { $0 < cells.count ? cells[$0] : nil } ?? ""
             let relationStr = relationIdx.flatMap { $0 < cells.count ? cells[$0] : nil } ?? ""
             let email = emailIdx.flatMap { $0 < cells.count ? cells[$0] : nil } ?? ""
             let mobile = mobileIdx.flatMap { $0 < cells.count ? cells[$0] : nil } ?? ""
@@ -119,6 +121,7 @@ enum FamilyTreeCSVImport {
 
             let person = FamilyPerson(
                 name: rawName,
+                preferredName: preferredName.trimmingCharacters(in: .whitespacesAndNewlines),
                 birthDate: birth,
                 notes: note,
                 email: email.trimmingCharacters(in: .whitespacesAndNewlines),
