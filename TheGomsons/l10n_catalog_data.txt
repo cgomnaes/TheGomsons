@@ -61,10 +61,20 @@ cocker.news.sub_soon|%@ renews in %d days|%@ fornyes om %d dager
 icloud.label|iCloud for The Gomsons|iCloud for The Gomsons
 icloud.refresh|Refresh status|Oppdater status
 sync.reload_local|Reload shared data on this device|Last inn delt data på denne enheten
+sync.pending_reload_hint|New family data arrived from iCloud. Reload to show subscriptions and other updates on this device.|Ny familiedata kom fra iCloud. Last inn på nytt for å vise abonnement og andre oppdateringer på denne enheten.
+sync.pending_auto_reload|New family data is syncing from iCloud and will appear shortly…|Ny familiedata synkes fra iCloud og vises snart…
+sync.simulator_icloud_footnote|Simulator: sign in to iCloud in Settings → Apple Account for shared sync to work. Local data still works offline.|Simulator: logg på iCloud i Innstillinger → Apple-konto for at delt synk skal fungere. Lokal data fungerer fortsatt uten nett.
+sync.store_error_title|Could not open local data|Kunne ikke åpne lokal data
 icloud.checking|Checking iCloud…|Sjekker iCloud…
 sync.family|Family sync|Familie-synk
 sync.family_footnote|The app keeps one shared family library in iCloud (holidays, properties, stash, calendar, subs, family tree). Every signed-in device should show the same entries. If someone only sees what they typed on their own phone, CloudKit is not importing others’ data—check Xcode for CloudKit errors, fix indexes in CloudKit Console, use the same TestFlight/App Store build for everyone, and confirm public record types allow reads for all family accounts—not creator-only.|Appen har ett delt familiebibliotek i iCloud (ferier, eiendom, utstyr, kalender, abonnement, slektstre). Alle innloggede enheter skal vise samme data. Ser du bare egne notater, sjekk CloudKit-feil, indekser i CloudKit Console, samme TestFlight/App Store-build, og at alle familiemedlemmer kan lese offentlige poster.
 sync.env_footnote|This install uses CloudKit’s Production database—the same pool as TestFlight and the App Store, including when you Run from Xcode. Everyone needs iCloud signed in and indexes configured in CloudKit Console (Production) if mirroring logs errors. Xcode changes to trips or properties are visible to testers; remove the Production container environment entitlement from the target if you need a separate Development database again.|Denne installasjonen bruker CloudKit Production (samme som TestFlight/App Store, også fra Xcode). Alle trenger iCloud og riktige indekser i CloudKit Console ved speilfeil. Endringer fra Xcode er synlige for testere; fjern Production-entitlement hvis du trenger egen utviklingsdatabase.
+sync.error.generic|iCloud %@ failed: %@|iCloud %@ feilet: %@
+sync.error.schema_mismatch|iCloud %@ failed: the Production CloudKit schema is missing fields (for example CD_propertyRegisterURL on properties). Import CloudKit/PublicSchema.ckdb to Development, then Deploy Schema to Production in CloudKit Console.|iCloud %@ feilet: Production-skjemaet mangler felt (for eksempel CD_propertyRegisterURL på eiendommer). Importer CloudKit/PublicSchema.ckdb til Development, og deploy skjemaet til Production i CloudKit Console.
+sync.error.indexes|iCloud %@ failed: CloudKit indexes are missing (Queryable/Sortable on ___modTime or recordName). Add them in CloudKit Console for Production, then try again.|iCloud %@ feilet: CloudKit-indekser mangler (Queryable/Sortable på ___modTime eller recordName). Legg dem til i CloudKit Console for Production, og prøv igjen.
+sync.error.permission|iCloud %@ failed: this iCloud account is not allowed to update a shared record. In CloudKit Console, grant Authenticated (_icloud) Write on CD_* types and deploy to Production.|iCloud %@ feilet: denne iCloud-kontoen har ikke lov til å oppdatere en delt post. Gi Authenticated (_icloud) Write på CD_*-typene i CloudKit Console og deploy til Production.
+sync.error.partial|iCloud %@ failed: some records could not sync (CloudKit error 2). Check Xcode for the nested errors (missing Production fields, write permission, or failed photo/asset download).|iCloud %@ feilet: noen poster kunne ikke synkes (CloudKit-feil 2). Sjekk Xcode for underliggende feil (manglende Production-felt, skrivetillatelse, eller feilet bilde-/asset-nedlasting).
+sync.error.asset_fetch|iCloud %@ failed: CloudKit could not download photo/file assets (often family photos on CD_FamilyPerson). Try again on Wi‑Fi or a real device; if the same records keep failing, clear those photos in CloudKit Console (Public → CD_FamilyPerson) or re-save the photos in the app.|iCloud %@ feilet: CloudKit klarte ikke å laste ned bilde-/fil-assets (ofte familiebilder på CD_FamilyPerson). Prøv på Wi‑Fi eller en ekte enhet; hvis de samme postene feiler igjen, fjern bildene i CloudKit Console (Public → CD_FamilyPerson) eller lagre bildene på nytt i appen.
 export.section|Export|Eksporter
 export.backup_now|Export full backup now|Eksporter full sikkerhetskopi nå
 export.preparing|Preparing backup…|Forbereder sikkerhetskopi…
@@ -75,6 +85,9 @@ export.restore_note|Restoring is for advanced recovery: replace the app’s data
 export.backup_description|Creates a folder in On My iPhone → The Gomsons → TheGomsonsBackups with a timestamp and a manifest file. Use it if a device is lost or data is corrupted.|Lager en mappe på «På min iPhone» → The Gomsons → TheGomsonsBackups med tidsstempel og manifest. Bruk hvis en enhet mistes eller data blir korrupt.
 data_backup.title|Data backup|Datasikkerhetskopi
 data_backup.export_failed|Could not export|Kunne ikke eksportere
+data_backup.monthly_title|Monthly iCloud backups|Månedlige iCloud-sikkerhetskopier
+data_backup.monthly_detail|Automatically saves a full copy to iCloud Drive about every 30 days.|Lagrer automatisk en full kopi til iCloud Drive omtrent hver 30. dag.
+data_backup.icloud_now|Back up to iCloud now|Sikkerhetskopier til iCloud nå
 home.accessibility|Home|Hjem
 stash.title|Belongings|Eiendeler
 stash.empty|No belongings yet|Ingen eiendeler ennå
@@ -754,3 +767,124 @@ property.all_maintenance|Full maintenance log|Full vedlikeholdslogg
 cocker.news.maint_overdue|Woof — %@ is overdue by %d days|Voff — %@ er forfalt med %d dager
 cocker.news.maint_today|Woof — %@ is due today|Voff — %@ forfaller i dag
 cocker.news.maint_soon|Woof — %@ due in %d days|Voff — %@ forfaller om %d dager
+properties.import_actions|Actions|Handlinger
+properties.import_allowed_values|Allowed values|Tillatte verdier
+properties.import_csv|Import CSV|Importer CSV
+properties.import_err_empty|The file is empty.|Filen er tom.
+properties.import_err_no_name|Missing required “name” column.|Mangler påkrevd kolonne «name».
+properties.import_err_no_rows|No data rows found under the header.|Fant ingen datarader under overskriften.
+properties.import_err_utf8|Couldn’t read the file as text (use UTF-8 CSV).|Klarte ikke å lese filen som tekst (bruk UTF-8 CSV).
+properties.import_footer|Empty name rows are skipped. Unknown kind/tenure values are warned and left unchanged.|Rader uten navn hoppes over. Ukjente verdier for type/eierskap gir advarsel og endres ikke.
+properties.import_how|How to import|Slik importerer du
+properties.import_intro|Download the CSV template, fill it in Google Sheets or Excel, then import the file here. Matching property names update existing entries.|Last ned CSV-malen, fyll den i Google Sheets eller Excel, og importer filen her. Samme eiendomsnavn oppdaterer eksisterende oppføringer.
+properties.import_kinds_help|kind: house, cabin, apartment, land, other|kind: house, cabin, apartment, land, other (hus, hytte, leilighet, tomt, annet)
+properties.import_result_title|Import finished|Import fullført
+properties.import_services_help|service kind: electricity, gas, water, internet, publicServices, insurance, other|tjenestetype: electricity, gas, water, internet, publicServices, insurance, other
+properties.import_share_template|Share CSV template|Del CSV-mal
+properties.import_sheets_steps|1) Share or save the template\n2) Edit rows (one property per row)\n3) Download as CSV (UTF-8)\n4) Tap Import CSV and choose the file|1) Del eller lagre malen\n2) Rediger rader (én eiendom per rad)\n3) Last ned som CSV (UTF-8)\n4) Trykk Importer CSV og velg filen
+properties.import_summary_fmt|Added %lld · Updated %lld · Contacts +%lld · Emergencies +%lld · Contractors +%lld · Services +%lld|Lagt til %lld · Oppdatert %lld · Kontakter +%lld · Nødnumre +%lld · Håndverkere +%lld · Leverandører +%lld
+properties.import_template|Properties CSV template|CSV-mal for eiendommer
+properties.import_template_message|Template for importing properties into TheGomsons.|Mal for å importere eiendommer til TheGomsons.
+properties.import_title|Import properties|Importer eiendommer
+properties.import_trades_help|contractor trade: electrician, plumber, handyman, snowPlougher, carpenter, painter, landscaper, locksmith, other|håndverkerfag: electrician, plumber, handyman, snowPlougher, carpenter, painter, landscaper, locksmith, other
+properties.import_warn_empty_name_fmt|Row %lld: skipped (empty name).|Rad %lld: hoppet over (tomt navn).
+properties.import_warn_kind_fmt|Unknown kind “%@” (row %lld).|Ukjent type «%@» (rad %lld).
+properties.import_warn_service_fmt|Unknown service kind “%@” (row %lld).|Ukjent tjenestetype «%@» (rad %lld).
+properties.import_warn_tenure_fmt|Unknown tenure “%@” (row %lld).|Ukjent eierskap «%@» (rad %lld).
+properties.import_warn_trade_fmt|Unknown contractor trade “%@” (row %lld).|Ukjent håndverkerfag «%@» (rad %lld).
+properties.import_warnings_header|Warnings|Advarsler
+properties.import_warnings_more_fmt|…and %lld more|…og %lld til
+properties.importing|Importing…|Importerer…
+property.account_fmt|Account: %@|Konto: %@
+property.account_number|Account number|Kontonummer
+property.add_number|Add number|Legg til nummer
+property.add_repair_contact|Add repair contact|Legg til reparasjonskontakt
+property.alarm_code|Alarm / security code|Alarm- / sikkerhetskode
+property.category|Category|Kategori
+property.company_name|Company|Selskap
+property.contact|Contact|Kontakt
+property.contact.new|New contact|Ny kontakt
+property.contact.notes_prompt|Notes about this contact|Notater om kontakten
+property.contact.person|Person|Person
+property.contact.primary_toggle|Primary contact|Primærkontakt
+property.contact.reach|Phone / email|Telefon / e-post
+property.contact.unnamed|Unnamed contact|Kontakt uten navn
+property.contacts.empty_rented|Add your landlord, agency, or building contact.|Legg til utleier, forvaltning eller byggekontakt.
+property.contractor.name_company|Name / company|Navn / firma
+property.contractor.notes_prompt|Notes (availability, preferred for…)|Notater (tilgjengelighet, foretrukket for …)
+property.contractors.empty|No contractors yet.|Ingen håndverkere ennå.
+property.contractors.empty_rented|Ask the landlord who to call for repairs, or add contacts yourself.|Spør utleier hvem som skal kontaktes ved reparasjoner, eller legg til selv.
+property.contractors.hint_rented|Repair contacts for this rental.|Reparasjonskontakter for dette leieforholdet.
+property.details|Details|Detaljer
+property.emergency|Emergency|Nød
+property.emergency.empty|No emergency numbers yet.|Ingen nødnumre ennå.
+property.emergency.number_section|Number|Nummer
+property.emergency.preset.building|Building / caretaker|Bygg / vaktmester
+property.emergency.preset.fire|Fire|Brann
+property.emergency.preset.gas|Gas utility|Gassleverandør
+property.emergency.preset.poison|Poison control|Giftinformasjonen
+property.emergency.preset.police|Police|Politi
+property.field.name|Name|Navn
+property.gate_code|Gate / access code|Port- / adgangskode
+property.insurance_policy|Policy number|Polisenummer
+property.name_edit_footer|Shown on the properties list and maps.|Vises i eiendomslisten og på kart.
+property.number_dash|—|—
+property.open_register|Open in browser|Åpne i nettleser
+property.parking_prompt|Spaces, permits, EV charger…|Plasser, tillatelser, elbillader …
+property.primary|Primary|Primær
+property.provider.notes_prompt|Account notes, meter IDs…|Kontonotater, måler-ID …
+property.register_url|Property register URL|Eiendomsregister-URL
+property.register_url_footer|For Norwegian properties, paste the Kartverket link (eiendomsregisteret), e.g. https://eiendomsregisteret.kartverket.no/eiendom/3436/203/64|For norske eiendommer: lim inn lenken fra Kartverket (eiendomsregisteret), f.eks. https://eiendomsregisteret.kartverket.no/eiendom/3436/203/64
+property.register_url_placeholder|https://eiendomsregisteret.kartverket.no/eiendom/…|https://eiendomsregisteret.kartverket.no/eiendom/…
+property.rename_section|Name & address|Navn og adresse
+property.rental.add_footer|You can add more details later on the property page.|Du kan legge til flere detaljer senere på eiendomssiden.
+property.rental.amount_placeholder|Amount|Beløp
+property.rental.company|Rental company|Utleiefirma
+property.rental.company_email|Company email|Firma-e-post
+property.rental.company_phone|Company phone|Firmatelefon
+property.rental.contract_notes|Contract notes|Kontraktsnotater
+property.rental.contract_ref|Contract reference|Kontraktsreferanse
+property.rental.deposit|Deposit|Depositum
+property.rental.footer|Lease and landlord details for this rental.|Leiekontrakt og utleierdetaljer for dette leieforholdet.
+property.rental.landlord|Landlord / owner|Utleier / eier
+property.rental.lease_end|Lease end|Leieslutt
+property.rental.lease_start|Lease start|Leiestart
+property.rental.monthly_rent|Monthly rent|Månedlig leie
+property.rental.section|Rental|Leie
+property.repair_contacts|Repair contacts|Reparasjonskontakter
+property.role.hoa|HOA / board|Sameie / styre
+property.role.insurance|Insurance|Forsikring
+property.role.landlord|Landlord|Utleier
+property.role.manager|Manager|Forvalter
+property.role.neighbor|Neighbor|Nabo
+property.role.plumber|Plumber|Rørlegger
+property.role.super|Superintendent / caretaker|Vaktmester
+property.smart_home_prompt|Hubs, codes, guest Wi‑Fi…|Hubber, koder, gjeste-Wi‑Fi …
+property.ssid|Network name|Nettverksnavn
+property.tenure|Ownership|Eierskap
+property.tenure.owned|Owned|Eid
+property.tenure.rented|Rented|Leid
+property.trade|Trade|Fag
+property.trash_prompt|Pickup days, bins, recycling center…|Hentedager, spann, gjenvinningsstasjon …
+property.utilities_prompt|Account numbers, meter IDs, login notes…|Kontonumre, måler-ID, innlogging …
+property.water_shutoff_prompt|Where the main shutoff is|Hvor hovedkranen er
+property.website|Website|Nettsted
+property.website_portal|Portal / website|Portal / nettsted
+property.facts.br_fmt|%lld BR|%lld sov
+property.facts.ba_fmt|%g BA|%g bad
+property.facts.area_fmt|%lld m²|%lld m²
+family_tree.import_csv|Import CSV|Importer CSV
+family_tree.import_err_empty|The file is empty.|Filen er tom.
+family_tree.import_err_no_name|Missing required “name” column.|Mangler påkrevd kolonne «name».
+family_tree.import_err_no_rows|No data rows found under the header.|Fant ingen datarader under overskriften.
+family_tree.import_err_utf8|Couldn’t read the file as text (use UTF-8 CSV).|Klarte ikke å lese filen som tekst (bruk UTF-8 CSV).
+family_tree.import_menu_a11y|Import family tree|Importer slektstre
+family_tree.import_ok_fmt|Imported %lld people.|Importerte %lld personer.
+family_tree.import_result_title|Import finished|Import fullført
+family_tree.import_template|Family tree CSV template|CSV-mal for slektstre
+family_tree.import_template_message|Template for importing people into TheGomsons.|Mal for å importere personer til TheGomsons.
+family_tree.import_warn_duplicate_fmt|Duplicate name “%@” skipped.|Duplikatnavn «%@» hoppet over.
+family_tree.import_warn_empty_name_fmt|Row %lld: skipped (empty name).|Rad %lld: hoppet over (tomt navn).
+family_tree.import_warn_partner_busy_fmt|“%@” already has a partner link.|«%@» har allerede en partnerkobling.
+family_tree.import_warn_partner_fmt|Partner “%@” not found for %@.|Partner «%@» ble ikke funnet for %@.
+family_tree.import_warnings_header|Warnings|Advarsler

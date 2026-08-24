@@ -15,9 +15,12 @@ struct DataBackupSettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var isExporting = false
+    @State private var isRunningMonthly = false
     @State private var exportError: String?
+    @State private var statusMessage: String?
     @State private var sharePayload: SharePayload?
     @State private var refreshToken = UUID()
+    @State private var monthlyEnabled = AppDataBackup.monthlyICloudBackupsEnabled
 
     var body: some View {
         NavigationStack {
@@ -53,7 +56,12 @@ struct DataBackupSettingsView: View {
                     if cloud.pendingDeferredSwiftDataReload {
                         Text(String(localized: "sync.pending_reload_hint"))
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let syncError = cloud.lastCloudKitSyncErrorMessage {
+                        Text(syncError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
                     }
                     Button(String(localized: "sync.reload_local")) {
                         cloud.refreshFamilyDataFromStore()
@@ -65,9 +73,64 @@ struct DataBackupSettingsView: View {
                 }
 
                 Section {
+                    Toggle(isOn: $monthlyEnabled) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Monthly iCloud backups")
+                            Text("Automatically saves a full copy to iCloud Drive about every 30 days.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .onChange(of: monthlyEnabled) { _, newValue in
+                        AppDataBackup.monthlyICloudBackupsEnabled = newValue
+                    }
+
+                    LabeledContent("Last monthly backup") {
+                        Text(lastMonthlyText)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+
+                    if let days = AppDataBackup.daysUntilNextMonthlyBackup, AppDataBackup.lastMonthlyBackupDate != nil {
+                        LabeledContent("Next due") {
+                            Text(days == 0 ? "Due now" : "In \(days) day\(days == 1 ? "" : "s")")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if let err = AppDataBackup.lastMonthlyBackupError, !err.isEmpty {
+                        Text(err)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+
+                    Text("Backups appear in Files → iCloud Drive → The Gomsons → MonthlyBackups. The last \(AppDataBackup.monthlyRetentionCount) are kept.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        Task { await runMonthlyNow() }
+                    } label: {
+                        if isRunningMonthly {
+                            HStack {
+                                ProgressView()
+                                Text("Backing up to iCloud…")
+                            }
+                        } else {
+                            Label("Back up to iCloud now", systemImage: "icloud.and.arrow.up")
+                        }
+                    }
+                    .disabled(isRunningMonthly || isExporting || !AppDataBackup.iCloudDriveAvailable)
+                } header: {
+                    Text("Automatic backups")
+                }
+
+                Section {
                     Text(String(localized: "export.backup_description"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section(String(localized: "export.section")) {
@@ -83,7 +146,32 @@ struct DataBackupSettingsView: View {
                             Label(String(localized: "export.backup_now"), systemImage: "arrow.down.doc.fill")
                         }
                     }
-                    .disabled(isExporting)
+                    .disabled(isExporting || isRunningMonthly)
+                }
+
+                Section("iCloud monthly backups") {
+                    let items = AppDataBackup.listICloudMonthlyExports()
+                    if items.isEmpty {
+                        Text("No monthly iCloud backups yet.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(items, id: \.path) { url in
+                            Button {
+                                sharePayload = SharePayload(url: url)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(url.lastPathComponent)
+                                        .font(.body.weight(.medium))
+                                        .foregroundStyle(.primary)
+                                    if let date = modificationDate(of: url) {
+                                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Section(String(localized: "export.recent")) {
@@ -113,8 +201,16 @@ struct DataBackupSettingsView: View {
 
                 Section(String(localized: "export.about_restore")) {
                     Text(String(localized: "export.restore_note"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let statusMessage {
+                    Section {
+                        Text(statusMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .id(refreshToken)
@@ -122,6 +218,7 @@ struct DataBackupSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 cloud.refreshCloudKitAccountStatus()
+                monthlyEnabled = AppDataBackup.monthlyICloudBackupsEnabled
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -142,6 +239,17 @@ struct DataBackupSettingsView: View {
         }
     }
 
+    private var lastMonthlyText: String {
+        if let date = AppDataBackup.lastMonthlyBackupDate {
+            var text = date.formatted(date: .abbreviated, time: .shortened)
+            if let name = AppDataBackup.lastMonthlyBackupPath {
+                text += " · \(name)"
+            }
+            return text
+        }
+        return "Never"
+    }
+
     private func modificationDate(of url: URL) -> Date? {
         try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     }
@@ -150,6 +258,7 @@ struct DataBackupSettingsView: View {
         await MainActor.run {
             isExporting = true
             exportError = nil
+            statusMessage = nil
         }
         do {
             let url = try AppDataBackup.createTimestampedExport(modelContext: modelContext)
@@ -161,6 +270,27 @@ struct DataBackupSettingsView: View {
         } catch {
             await MainActor.run {
                 isExporting = false
+                exportError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+        }
+    }
+
+    private func runMonthlyNow() async {
+        await MainActor.run {
+            isRunningMonthly = true
+            exportError = nil
+            statusMessage = nil
+        }
+        do {
+            let url = try AppDataBackup.createMonthlyICloudBackup(modelContext: modelContext)
+            await MainActor.run {
+                isRunningMonthly = false
+                refreshToken = UUID()
+                statusMessage = "Saved to iCloud Drive: \(url.lastPathComponent)"
+            }
+        } catch {
+            await MainActor.run {
+                isRunningMonthly = false
                 exportError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             }
         }

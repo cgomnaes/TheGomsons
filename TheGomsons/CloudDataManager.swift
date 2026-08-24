@@ -142,8 +142,9 @@ import _SwiftData_CoreData
 /// **Dual stack:** CloudKit mirroring uses `NSPersistentCloudKitContainer`; the UI uses
 /// SwiftData on the **same store URL** with `cloudKitDatabase: .none`. After a successful
 /// CloudKit **import**, SwiftData’s coordinator can stay stale. Rebuilding `ModelContainer`
-/// while views still hold the old `ModelContext` crashes—so we **defer** reopen until the
-/// app is backgrounded (or the user taps Reload), and tear the UI down first (`modelContainer = nil`).
+/// while views still hold the old `ModelContext` crashes—so we **only** reopen when the
+/// app is **backgrounded** (or the user taps Reload in settings), after tearing the UI
+/// down first (`modelContainer = nil`). Never auto-reload while foregrounded.
 @MainActor
 final class CloudDataManager: ObservableObject {
     static let shared = CloudDataManager()
@@ -203,8 +204,12 @@ final class CloudDataManager: ObservableObject {
     /// Bumped when SwiftData is reopened (after a deferred/manual reload).
     @Published private(set) var swiftDataStoreEpoch = 0
 
-    /// True when CloudKit imported rows that SwiftData may not show until the next safe reload.
+    /// True when CloudKit imported rows that SwiftData may not show until the next safe reload
+    /// (app backgrounded, or user taps Reload in Family sync settings).
     @Published private(set) var pendingDeferredSwiftDataReload = false
+
+    /// Latest non-account CloudKit mirroring failure (export/import), surfaced in Family sync settings.
+    @Published private(set) var lastCloudKitSyncErrorMessage: String?
 
     /// Non-nil when the local store failed to open (avoids `fatalError` so the UI can explain).
     @Published private(set) var storeLoadErrorMessage: String?
@@ -286,12 +291,22 @@ final class CloudDataManager: ObservableObject {
                     // Simulator without iCloud, or temporary auth — expected; not a crash path.
                     print("[TheGomsons] CloudKit \(typeLabel): iCloud unavailable (\(Self.shortCloudKitError(error))). Local data still works.")
                 } else {
-                    print("[TheGomsons] CloudKit \(typeLabel) failed: \(error.localizedDescription)")
+                    print("[TheGomsons] CloudKit \(typeLabel) failed: \(error)")
+                    print("[TheGomsons] CloudKit \(typeLabel) nested: \(Self.debugCloudKitErrorChain(error))")
+                    Task { @MainActor in
+                        CloudDataManager.shared.recordCloudKitSyncError(error, phase: typeLabel)
+                    }
                 }
                 return
             }
             guard event.endDate != nil else { return }
             print("[TheGomsons] CloudKit \(typeLabel) succeeded")
+
+            if event.type == .export || event.type == .import {
+                Task { @MainActor in
+                    CloudDataManager.shared.lastCloudKitSyncErrorMessage = nil
+                }
+            }
 
             // Never rebuild ModelContainer while the UI is live — that was crashing more often
             // as sync traffic grew. Mark a deferred reload instead.
@@ -353,9 +368,9 @@ final class CloudDataManager: ObservableObject {
     }
 
     /// CloudKit finished importing into the Core Data side of the dual stack.
-    /// Schedules a **deferred** SwiftData reopen (background / manual)—never swaps mid-session.
+    /// Do **not** tear down `ModelContainer` while the UI is foregrounded — that crashes.
+    /// Mark pending; reopen only on background (or explicit Reload in settings).
     func noteSuccessfulCloudKitImport() {
-        // Without an iCloud account, "import succeeded" is rare; still don't hot-swap.
         pendingDeferredSwiftDataReload = true
         print("[TheGomsons] CloudKit import noted; SwiftData will reopen when the app backgrounds or you tap Reload (epoch \(swiftDataStoreEpoch)).")
     }
@@ -364,6 +379,152 @@ final class CloudDataManager: ObservableObject {
     func applyDeferredSwiftDataReloadIfNeeded() {
         guard pendingDeferredSwiftDataReload else { return }
         reloadSwiftDataContainerSafely(reason: "deferred-import", immediate: false)
+    }
+
+    /// Records a mirroring failure for Family sync troubleshooting (schema / permission / corrupt rows).
+    func recordCloudKitSyncError(_ error: Error, phase: String) {
+        let message = Self.userFacingCloudKitErrorMessage(error, phase: phase)
+        lastCloudKitSyncErrorMessage = message
+        print("[TheGomsons] CloudKit \(phase) user-facing: \(message)")
+    }
+
+    nonisolated private static func userFacingCloudKitErrorMessage(_ error: Error, phase: String) -> String {
+        let leaves = leafCloudKitErrors(from: error)
+        // Include `String(describing:)` — Core Data often puts "Fetching asset failed" only in the dump,
+        // while `event.error` itself is a bare CKError code 2 with empty localizedDescription.
+        let combined = (
+            leaves.map { diagnosticText(for: $0) }
+                + [String(describing: error), error.localizedDescription]
+        ).joined(separator: " ").lowercased()
+
+        if combined.contains("fetching asset failed")
+            || combined.contains("asset not available")
+            || combined.contains("assetfilenotfound") {
+            return String(format: String(localized: "sync.error.asset_fetch"), locale: .current, phase)
+        }
+        if combined.contains("production schema")
+            || combined.contains("cannot create or modify field")
+            || combined.contains("cannot create field") {
+            return String(
+                format: String(localized: "sync.error.schema_mismatch"),
+                locale: .current,
+                phase
+            )
+        }
+        if combined.contains("not marked queryable")
+            || combined.contains("not marked sortable")
+            || combined.contains("not marked searchable") {
+            return String(format: String(localized: "sync.error.indexes"), locale: .current, phase)
+        }
+        if leaves.contains(where: { $0.domain == CKError.errorDomain && $0.code == CKError.Code.permissionFailure.rawValue }) {
+            return String(format: String(localized: "sync.error.permission"), locale: .current, phase)
+        }
+        // Nested networkFailure (4) under partialFailure usually means asset/CDN download, not "no Wi‑Fi".
+        if leaves.contains(where: {
+            $0.domain == CKError.errorDomain && $0.code == CKError.Code.networkFailure.rawValue
+        }) {
+            return String(format: String(localized: "sync.error.asset_fetch"), locale: .current, phase)
+        }
+        if leaves.contains(where: { $0.domain == CKError.errorDomain && $0.code == CKError.Code.partialFailure.rawValue })
+            || (error as NSError).domain == CKError.errorDomain && (error as NSError).code == CKError.Code.partialFailure.rawValue {
+            return String(format: String(localized: "sync.error.partial"), locale: .current, phase)
+        }
+        if let detail = distinctiveLeafDescription(leaves) {
+            return String(format: String(localized: "sync.error.generic"), locale: .current, phase, detail)
+        }
+        return String(format: String(localized: "sync.error.generic"), locale: .current, phase, error.localizedDescription)
+    }
+
+    /// Core Data mirroring wraps the useful CKError inside `partialFailure` (code 2) and Cocoa errors.
+    nonisolated private static func leafCloudKitErrors(from error: Error) -> [NSError] {
+        var seen = Set<String>()
+        var leaves: [NSError] = []
+        collectCloudKitErrors(from: error, into: &leaves, seen: &seen)
+        return leaves
+    }
+
+    nonisolated private static func collectCloudKitErrors(from error: Error, into leaves: inout [NSError], seen: inout Set<String>) {
+        let ns = error as NSError
+        let fingerprint = "\(ns.domain)#\(ns.code)#\(ns.localizedDescription)"
+        guard seen.insert(fingerprint).inserted else { return }
+
+        var foundChild = false
+
+        if ns.domain == CKError.errorDomain, ns.code == CKError.Code.partialFailure.rawValue {
+            let partialFromKey = ns.userInfo[CKPartialErrorsByItemIDKey] as? [AnyHashable: Any]
+            let partialFromCK = (error as? CKError)?.partialErrorsByItemID
+            let partialValues: [Any] = {
+                if let partialFromKey { return Array(partialFromKey.values) }
+                if let partialFromCK { return Array(partialFromCK.values) }
+                return []
+            }()
+            for value in partialValues {
+                if let child = value as? Error {
+                    foundChild = true
+                    collectCloudKitErrors(from: child, into: &leaves, seen: &seen)
+                }
+            }
+        }
+
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? Error {
+            foundChild = true
+            collectCloudKitErrors(from: underlying, into: &leaves, seen: &seen)
+        }
+
+        if let detailed = ns.userInfo[NSDetailedErrorsKey] as? [Error] {
+            for child in detailed {
+                foundChild = true
+                collectCloudKitErrors(from: child, into: &leaves, seen: &seen)
+            }
+        }
+
+        for (key, value) in ns.userInfo {
+            let keyName = String(describing: key)
+            if keyName == NSUnderlyingErrorKey || keyName == NSDetailedErrorsKey { continue }
+            if keyName == CKPartialErrorsByItemIDKey { continue }
+            if let child = value as? NSError, child !== ns {
+                foundChild = true
+                collectCloudKitErrors(from: child, into: &leaves, seen: &seen)
+            }
+        }
+
+        let isPartialWrapper = ns.domain == CKError.errorDomain && ns.code == CKError.Code.partialFailure.rawValue
+        if !foundChild || (ns.domain == CKError.errorDomain && !isPartialWrapper) {
+            leaves.append(ns)
+        } else if isPartialWrapper && !foundChild {
+            leaves.append(ns)
+        }
+    }
+
+    nonisolated private static func diagnosticText(for ns: NSError) -> String {
+        var parts = [ns.localizedDescription]
+        if let reason = ns.userInfo[NSLocalizedFailureReasonErrorKey] as? String {
+            parts.append(reason)
+        }
+        if let debug = ns.userInfo[NSDebugDescriptionErrorKey] as? String {
+            parts.append(debug)
+        }
+        return parts.joined(separator: " ")
+    }
+
+    nonisolated private static func distinctiveLeafDescription(_ leaves: [NSError]) -> String? {
+        let interesting = leaves.filter { ns in
+            if ns.domain == CKError.errorDomain && ns.code == CKError.Code.partialFailure.rawValue {
+                return false
+            }
+            let lower = ns.localizedDescription.lowercased()
+            if lower.contains("ckerrordomain") && (lower.contains("error 2") || lower.contains("feil 2")) {
+                return false
+            }
+            return true
+        }
+        return interesting.first.map { $0.localizedDescription }
+    }
+
+    nonisolated private static func debugCloudKitErrorChain(_ error: Error) -> String {
+        leafCloudKitErrors(from: error)
+            .map { "\($0.domain) \($0.code): \($0.localizedDescription)" }
+            .joined(separator: " | ")
     }
 
     /// Manual pull from Data backup / troubleshooting — rebuilds SwiftData against the shared store.

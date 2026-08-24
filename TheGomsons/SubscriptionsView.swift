@@ -7,6 +7,7 @@ import SwiftData
 import SwiftUI
 
 struct SubscriptionsView: View {
+    @EnvironmentObject private var cloud: CloudDataManager
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openFamilyLanding) private var openFamilyLanding
     @Query(sort: \Subscription.sortOrder) private var subscriptions: [Subscription]
@@ -15,6 +16,7 @@ struct SubscriptionsView: View {
     @State private var showAdd = false
     @State private var selectedSubscription: Subscription?
     @State private var summaryPeriod: SummaryPeriod = .monthly
+    @State private var editMode: EditMode = .inactive
 
     enum SummaryPeriod: Int, CaseIterable {
         case monthly
@@ -119,27 +121,43 @@ struct SubscriptionsView: View {
                         .listRowBackground(Color.clear)
 
                         ForEach(filtered) { sub in
-                            Button {
-                                selectedSubscription = sub
-                            } label: {
-                                SubscriptionRowView(subscription: sub)
-                            }
+                            SubscriptionRowView(subscription: sub)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    guard editMode == .inactive else { return }
+                                    selectedSubscription = sub
+                                }
                         }
                         .onDelete(perform: deleteSubscriptions)
+                        .onMove(perform: moveSubscriptions)
                     }
                     .listStyle(.insetGrouped)
                 }
             }
+            .environment(\.editMode, $editMode)
             .background(Color(.systemGroupedBackground))
             .navigationTitle(String(localized: "subs.title"))
             .onAppear {
                 FamilyCalendarNotifications.rescheduleAllSubExpiries(subscriptions)
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                // Pending import reloads are applied automatically (debounced). Only surface real errors here.
+                if let errorMessage = cloud.lastCloudKitSyncErrorMessage {
+                    SubscriptionSyncBanner(
+                        pendingReload: false,
+                        errorMessage: errorMessage,
+                        onReload: { cloud.refreshFamilyDataFromStore() }
+                    )
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     homeButton { openFamilyLanding() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if !subscriptions.isEmpty {
+                        EditButton()
+                    }
                     Button {
                         showAdd = true
                     } label: {
@@ -147,6 +165,7 @@ struct SubscriptionsView: View {
                             .symbolRenderingMode(.hierarchical)
                     }
                     .accessibilityLabel(String(localized: "subs.add"))
+                    .disabled(editMode.isEditing)
                 }
             }
             .sheet(isPresented: $showAdd) {
@@ -171,6 +190,30 @@ struct SubscriptionsView: View {
             let sub = filtered[index]
             FamilyCalendarNotifications.cancelSubExpiry(sub)
             modelContext.delete(sub)
+        }
+        try? modelContext.save()
+    }
+
+    /// Drag-reorder within the visible (possibly filtered) list; writes `sortOrder` so CloudKit keeps the order.
+    private func moveSubscriptions(from source: IndexSet, to destination: Int) {
+        var reorderedVisible = filtered
+        reorderedVisible.move(fromOffsets: source, toOffset: destination)
+
+        let allOrdered = subscriptions.sorted { lhs, rhs in
+            if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+
+        var visibleIterator = reorderedVisible.makeIterator()
+        let merged: [Subscription] = allOrdered.map { sub in
+            if categoryFilter.matches(sub.category), let next = visibleIterator.next() {
+                return next
+            }
+            return sub
+        }
+
+        for (index, sub) in merged.enumerated() {
+            sub.sortOrder = index
         }
         try? modelContext.save()
     }
@@ -606,6 +649,35 @@ private struct SubscriptionEditorView: View {
         try? modelContext.save()
         onDone()
         dismiss()
+    }
+}
+
+private struct SubscriptionSyncBanner: View {
+    let pendingReload: Bool
+    let errorMessage: String?
+    let onReload: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if pendingReload {
+                Text(String(localized: "sync.pending_reload_hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            if pendingReload {
+                Button(String(localized: "sync.reload_local"), action: onReload)
+                    .font(.caption)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(Color(.secondarySystemGroupedBackground))
     }
 }
 

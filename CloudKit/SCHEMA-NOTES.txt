@@ -63,3 +63,47 @@ never see updates—import/deploy PublicSchema.ckdb (Development → Deploy to P
 Holiday trip reviews: CD_reviewText plus CD_reviewPhoto1Data / CD_reviewPhoto2Data /
 CD_reviewPhoto3Data (each BYTES + _ckAsset) on CD_HolidayTrip. Import/deploy after
 shipping the past-trip review UI (up to three photos).
+
+Property register URL: CD_propertyRegisterURL on CD_Property (Kartverket /
+eiendomsregisteret links for Norwegian properties). Import/deploy after shipping.
+
+Family nicknames: CD_preferredName on CD_FamilyPerson. Missing in Production blocks every
+person export that includes the field.
+
+Property rental block: CD_tenureRaw, CD_landlordOrOwnerName, CD_rentalCompanyName,
+CD_rentalCompanyPhone, CD_rentalCompanyEmail, CD_depositAmount, CD_monthlyRent,
+CD_leaseStartDate, CD_leaseEndDate, CD_rentalContractReference, CD_rentalContractNotes
+on CD_Property. Missing CD_depositAmount alone is enough to fail property export.
+
+Trip planning picks: RECORD TYPE CD_HolidayPlanItem (title, detail, categoryRaw, placeName,
+mapsQuery, lat/long, sortOrder, sourceRaw, createdAt, trip). Missing type →
+“Cannot create new type CD_HolidayPlanItem in production schema”.
+
+Many-to-many join: Core Data uses record type CDMR with fields CD_entityNames,
+CD_recordNames, and CD_relationships (semicolon-separated strings), not CD_entityName.
+PublicSchema.ckdb includes those three (plus CD_entityName if already deployed — Production
+cannot drop fields). Import to Development, then Deploy Schema to Production.
+
+Holiday reviews: CD_reviewText (+ review photo BYTES/_ckAsset) on CD_HolidayTrip — must be
+in Production before past-trip reviews sync.
+
+If Xcode shows Partial Failure (2) with nested "Network Failure (4); Fetching asset failed"
+on CD_FamilyPerson (same record UUIDs every retry): CloudKit cannot download photo assets
+(CD_photoData_ckAsset). Export can still succeed. Fix: clear/re-upload those photos in the
+app, or in CloudKit Console → Public → Records delete the broken asset fields on those
+CD_FamilyPerson rows. Simulator asset CDN is flaky—confirm on a real device before assuming
+permanent corruption.
+
+── Deploy checklist (this log’s Production gaps) ───────────────────────────────
+From Xcode “Cannot create or modify field / Cannot create new type … in production schema”:
+  □ CD_preferredName (+ _ckAsset) on CD_FamilyPerson
+  □ CD_depositAmount (+ rental fields above) on CD_Property
+  □ CD_propertyRegisterURL on CD_Property (if not already deployed)
+  □ CD_reviewText (+ review photo fields) on CD_HolidayTrip
+  □ RECORD TYPE CD_HolidayPlanItem
+  □ CDMR — only if non-empty (Console blocks empty CDMR promote); otherwise deploy without it first
+1. Import CloudKit/PublicSchema.ckdb → Development (cktool or Console).
+2. If Deploy fails with “empty type CDMR”: Cancel → Development Schema → delete CDMR → Deploy again.
+3. CloudKit Console → Schema → Deploy Schema Changes → Production.
+4. Re-download Production schema and confirm preferredName / depositAmount / reviewText / HolidayPlanItem.
+5. Force-quit app, relaunch; confirm “CloudKit export succeeded”. Fix CDMR later if still logged.

@@ -24,6 +24,7 @@ struct TheGomsonsApp: App {
 private struct TheGomsonsRootView: View {
     @EnvironmentObject private var cloud: CloudDataManager
     @Environment(\.scenePhase) private var scenePhase
+    @State private var didAttemptMonthlyBackupThisSession = false
 
     var body: some View {
         Group {
@@ -47,9 +48,34 @@ private struct TheGomsonsRootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            // Safe dual-stack reopen: only when UI is not mid-interaction.
+            // Safe dual-stack reopen: only when leaving the UI (background). Tearing down
+            // ModelContainer while foregrounded (active / debounced import) causes frequent crashes.
             if phase == .background {
                 cloud.applyDeferredSwiftDataReloadIfNeeded()
+            }
+            if phase == .active {
+                runMonthlyBackupIfNeeded()
+            }
+        }
+        .onChange(of: cloud.modelContainer != nil) { _, ready in
+            if ready {
+                runMonthlyBackupIfNeeded()
+            }
+        }
+    }
+
+    private func runMonthlyBackupIfNeeded() {
+        guard !didAttemptMonthlyBackupThisSession else { return }
+        guard let container = cloud.modelContainer else { return }
+        guard AppDataBackup.monthlyICloudBackupsEnabled, AppDataBackup.isMonthlyBackupDue else { return }
+        didAttemptMonthlyBackupThisSession = true
+
+        Task { @MainActor in
+            // Brief delay so CloudKit / UI can settle after becoming active.
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            let context = ModelContext(container)
+            if let url = AppDataBackup.performMonthlyBackupIfNeeded(modelContext: context) {
+                print("[TheGomsons] Monthly iCloud backup saved: \(url.lastPathComponent)")
             }
         }
     }
