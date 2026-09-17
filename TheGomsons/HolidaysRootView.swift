@@ -25,11 +25,12 @@ struct HolidayTripsListContent: View {
     @Query(sort: \HolidayTrip.startDate, order: .reverse) private var allTrips: [HolidayTrip]
 
     private var trips: [HolidayTrip] {
+        let travelOnly = allTrips.filter { !$0.isCelebration }
         switch filter {
         case .upcoming:
-            allTrips.filter { !$0.isPastTrip }.sorted { $0.startDate < $1.startDate }
+            return travelOnly.filter { !$0.isPastTrip }.sorted { $0.startDate < $1.startDate }
         case .past:
-            allTrips.filter(\.isPastTrip).sorted { $0.startDate > $1.startDate }
+            return travelOnly.filter(\.isPastTrip).sorted { $0.startDate > $1.startDate }
         }
     }
 
@@ -161,10 +162,20 @@ struct HolidayTripCard: View {
                 .frame(height: 220)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(trip.tripName.isEmpty ? String(localized: "trip.untitled") : trip.tripName)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                    HStack(spacing: 8) {
+                        if trip.isCelebration {
+                            Label(trip.tripKind.displayTitle, systemImage: trip.tripKind.systemImage)
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(.white.opacity(0.22), in: Capsule())
+                        }
+                        Text(trip.tripName.isEmpty ? String(localized: "trip.untitled") : trip.tripName)
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                    }
                     Text("\(trip.startDate.formatted(date: .abbreviated, time: .omitted)) – \(trip.endDate.formatted(date: .abbreviated, time: .omitted))")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.white.opacity(0.92))
@@ -251,6 +262,10 @@ struct HolidayTripDetailView: View {
     @State private var showEditTrip = false
     @State private var showDeleteTripConfirm = false
     @State private var participantToEdit: HolidayTripParticipant?
+    @State private var destinationToEdit: HolidayDestination?
+    @State private var destinationToDelete: HolidayDestination?
+
+    private var isCelebration: Bool { trip.isCelebration }
 
     private var sortedParticipants: [HolidayTripParticipant] {
         (trip.participants ?? []).sorted { $0.sortOrder < $1.sortOrder }
@@ -330,6 +345,16 @@ struct HolidayTripDetailView: View {
     }
 
     var body: some View {
+        Group {
+            if trip.isCelebration {
+                HolidayCelebrationDetailView(trip: trip)
+            } else {
+                tripDetailScrollContent
+            }
+        }
+    }
+
+    private var tripDetailScrollContent: some View {
         GeometryReader { geo in
             let contentWidth = max(geo.size.width, 1)
             ScrollView {
@@ -364,23 +389,7 @@ struct HolidayTripDetailView: View {
         .background(Color(.systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        showEditTrip = true
-                    } label: {
-                        Label(String(localized: "trip.edit_trip"), systemImage: "pencil")
-                    }
-                    Button(role: .destructive) {
-                        showDeleteTripConfirm = true
-                    } label: {
-                        Label(String(localized: "trip.delete"), systemImage: "trash")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .accessibilityLabel(String(localized: "trip.actions.a11y"))
-            }
+            tripDetailToolbar
         }
         .confirmationDialog(
             trip.isPastTrip
@@ -401,10 +410,69 @@ struct HolidayTripDetailView: View {
             EditTripParticipantSheet(participant: participant)
         }
         .sheet(isPresented: $showAddStop) {
-            AddHolidayDestinationSheet(trip: trip)
+            HolidayDestinationEditorSheet(trip: trip)
+        }
+        .sheet(item: $destinationToEdit) { destination in
+            HolidayDestinationEditorSheet(trip: trip, destination: destination)
         }
         .sheet(isPresented: $showEditTrip) {
             HolidayTripEditorSheet(trip: trip)
+        }
+        .confirmationDialog(
+            String(localized: "trip.remove_stop"),
+            isPresented: Binding(
+                get: { destinationToDelete != nil },
+                set: { if !$0 { destinationToDelete = nil } }
+            ),
+            presenting: destinationToDelete
+        ) { destination in
+            Button(String(localized: "common.remove"), role: .destructive) {
+                deleteDestination(destination)
+                destinationToDelete = nil
+            }
+            Button(String(localized: "common.cancel"), role: .cancel) {
+                destinationToDelete = nil
+            }
+        } message: { destination in
+            Text(
+                String(
+                    format: String(localized: "trip.remove_stop_confirm"),
+                    locale: .current,
+                    destination.locationName.isEmpty
+                        ? String(localized: "trip.this_stop")
+                        : destination.locationName
+                )
+            )
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var tripDetailToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                Button {
+                    showEditTrip = true
+                } label: {
+                    Label(String(localized: "trip.edit_trip"), systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    showDeleteTripConfirm = true
+                } label: {
+                    Label(String(localized: "trip.delete"), systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .accessibilityLabel(String(localized: "trip.actions.a11y"))
+        }
+    }
+
+    private func deleteDestination(_ destination: HolidayDestination) {
+        modelContext.delete(destination)
+        do {
+            try modelContext.save()
+        } catch {
+            print("[TheGomsons] Failed to delete stop: \(error.localizedDescription)")
         }
     }
 
@@ -612,11 +680,28 @@ struct HolidayTripDetailView: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(sortedDestinations.enumerated()), id: \.element.persistentModelID) { idx, dest in
-                        DestinationTimelineRow(
-                            destination: dest,
-                            isFirst: idx == 0,
-                            isLast: idx == sortedDestinations.count - 1
-                        )
+                        Button {
+                            destinationToEdit = dest
+                        } label: {
+                            DestinationTimelineRow(
+                                destination: dest,
+                                isFirst: idx == 0,
+                                isLast: idx == sortedDestinations.count - 1
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                destinationToEdit = dest
+                            } label: {
+                                Label(String(localized: "trip.edit_stop"), systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                destinationToDelete = dest
+                            } label: {
+                                Label(String(localized: "trip.remove_stop"), systemImage: "mappin.slash")
+                            }
+                        }
                     }
                 }
             }
@@ -758,11 +843,12 @@ private struct DestinationTimelineRow: View {
 
 // MARK: - Sheets
 
-struct AddHolidayDestinationSheet: View {
+struct HolidayDestinationEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
     let trip: HolidayTrip
+    var destination: HolidayDestination?
 
     @State private var locationName = ""
     @State private var latText = ""
@@ -774,9 +860,31 @@ struct AddHolidayDestinationSheet: View {
     @State private var isSaving = false
     @State private var lookupAlertMessage: String?
     @State private var saveFailedMessage: String?
+    @State private var confirmRemove = false
+
+    init(trip: HolidayTrip, destination: HolidayDestination? = nil) {
+        self.trip = trip
+        self.destination = destination
+        if let destination {
+            _locationName = State(initialValue: destination.locationName)
+            if destination.latitude != 0 || destination.longitude != 0 {
+                _latText = State(initialValue: String(format: "%.5f", destination.latitude))
+                _lonText = State(initialValue: String(format: "%.5f", destination.longitude))
+            }
+            _activities = State(initialValue: destination.activities)
+            _arrival = State(initialValue: destination.arrivalDate)
+            _departure = State(initialValue: destination.departureDate)
+        }
+    }
+
+    private var isEditing: Bool { destination != nil }
 
     private var trimmedPlaceName: String {
         locationName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var displayStopName: String {
+        trimmedPlaceName.isEmpty ? String(localized: "trip.this_stop") : trimmedPlaceName
     }
 
     private var parsedCoordinate: (lat: Double, lon: Double)? {
@@ -863,10 +971,22 @@ struct AddHolidayDestinationSheet: View {
                     TextField(String(localized: "trip.activities"), text: $activities, axis: .vertical)
                         .lineLimit(2...6)
                 }
+                if isEditing {
+                    Section {
+                        Button(String(localized: "trip.remove_stop"), role: .destructive) {
+                            confirmRemove = true
+                        }
+                    }
+                }
             }
-            .navigationTitle(String(localized: "trip.add_stop_nav"))
+            .navigationTitle(
+                isEditing
+                    ? String(localized: "trip.edit_stop_nav")
+                    : String(localized: "trip.add_stop_nav")
+            )
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
+                guard !isEditing else { return }
                 let cal = Calendar.current
                 let s = cal.startOfDay(for: trip.startDate)
                 var e = cal.startOfDay(for: trip.endDate)
@@ -893,12 +1013,26 @@ struct AddHolidayDestinationSheet: View {
             } message: {
                 Text(saveFailedMessage ?? "")
             }
+            .confirmationDialog(
+                String(
+                    format: String(localized: "trip.remove_stop_confirm"),
+                    locale: .current,
+                    displayStopName
+                ),
+                isPresented: $confirmRemove,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "common.remove"), role: .destructive) {
+                    removeStop()
+                }
+                Button(String(localized: "common.cancel"), role: .cancel) {}
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.cancel")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "common.add")) {
+                    Button(isEditing ? String(localized: "common.save") : String(localized: "common.add")) {
                         Task { await saveStop() }
                     }
                     .fontWeight(.semibold)
@@ -941,17 +1075,26 @@ struct AddHolidayDestinationSheet: View {
         let a = cal.startOfDay(for: arrival)
         var d = cal.startOfDay(for: departure)
         if d < a { d = a }
-        let dest = HolidayDestination(
-            locationName: trimmedPlaceName,
-            latitude: coord.lat,
-            longitude: coord.lon,
-            arrivalDate: a,
-            departureDate: d,
-            activities: activities,
-            trip: trip
-        )
         await MainActor.run {
-            modelContext.insert(dest)
+            if let destination {
+                destination.locationName = trimmedPlaceName
+                destination.latitude = coord.lat
+                destination.longitude = coord.lon
+                destination.arrivalDate = a
+                destination.departureDate = d
+                destination.activities = activities
+            } else {
+                let dest = HolidayDestination(
+                    locationName: trimmedPlaceName,
+                    latitude: coord.lat,
+                    longitude: coord.lon,
+                    arrivalDate: a,
+                    departureDate: d,
+                    activities: activities,
+                    trip: trip
+                )
+                modelContext.insert(dest)
+            }
             do {
                 try modelContext.save()
                 dismiss()
@@ -959,6 +1102,18 @@ struct AddHolidayDestinationSheet: View {
                 print("[TheGomsons] Failed to save holiday destination: \(error.localizedDescription)")
                 saveFailedMessage = error.localizedDescription
             }
+        }
+    }
+
+    private func removeStop() {
+        guard let destination else { return }
+        modelContext.delete(destination)
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            print("[TheGomsons] Failed to remove stop: \(error.localizedDescription)")
+            saveFailedMessage = error.localizedDescription
         }
     }
 }
@@ -974,11 +1129,23 @@ struct HolidayTripEditorSheet: View {
     /// When true, default date range is in the future (upcoming trip). When false, defaults to a recent past range for logging. Ignored when editing.
     var defaultsToFuture: Bool
 
+    /// Default kind when creating a new trip (ignored when editing).
+    var defaultKind: HolidayTripKind
+
+    @Query(sort: [SortDescriptor(\Property.sortOrder), SortDescriptor(\Property.name)])
+    private var allProperties: [Property]
+
     @State private var name = ""
     @State private var start: Date
     @State private var end: Date
+    @State private var tripKind: HolidayTripKind
+    @State private var linkedProperty: Property?
     @State private var coverImageData: Data?
     @State private var notes = ""
+    @State private var celebrationSubject = ""
+    @State private var celebrationVenue = ""
+    @State private var celebrationMenu = ""
+    @State private var singleDayCelebration = true
     @State private var airlineName = ""
     @State private var bookingReference = ""
     @State private var mainAccommodation = ""
@@ -989,11 +1156,14 @@ struct HolidayTripEditorSheet: View {
     @State private var editingParticipant: HolidayTripParticipant?
     @State private var showAddTravelersInEditor = false
 
-    init(trip: HolidayTrip? = nil, defaultsToFuture: Bool = true) {
+    init(trip: HolidayTrip? = nil, defaultsToFuture: Bool = true, defaultKind: HolidayTripKind = .trip) {
         self.trip = trip
         self.defaultsToFuture = defaultsToFuture
+        self.defaultKind = defaultKind
         if let trip {
             _name = State(initialValue: trip.tripName)
+            _tripKind = State(initialValue: trip.tripKind)
+            _linkedProperty = State(initialValue: trip.linkedProperty)
             let cal = Calendar.current
             let s0 = cal.startOfDay(for: trip.startDate)
             let e0 = cal.startOfDay(for: trip.endDate)
@@ -1003,6 +1173,10 @@ struct HolidayTripEditorSheet: View {
             _end = State(initialValue: e)
             _coverImageData = State(initialValue: trip.coverImageData)
             _notes = State(initialValue: trip.notes)
+            _celebrationSubject = State(initialValue: trip.celebrationSubject)
+            _celebrationVenue = State(initialValue: trip.celebrationVenue)
+            _celebrationMenu = State(initialValue: trip.celebrationMenu)
+            _singleDayCelebration = State(initialValue: cal.startOfDay(for: s0) == cal.startOfDay(for: e0))
             _airlineName = State(initialValue: trip.airlineName)
             _bookingReference = State(initialValue: trip.bookingReference)
             _mainAccommodation = State(initialValue: trip.mainAccommodation)
@@ -1011,6 +1185,8 @@ struct HolidayTripEditorSheet: View {
             _coverLongitude = State(initialValue: trip.coverLongitude)
         } else {
             _name = State(initialValue: "")
+            _tripKind = State(initialValue: defaultKind)
+            _linkedProperty = State(initialValue: nil)
             let cal = Calendar.current
             let now = Date()
             if defaultsToFuture {
@@ -1024,6 +1200,10 @@ struct HolidayTripEditorSheet: View {
                 _end = State(initialValue: e)
             }
             _notes = State(initialValue: "")
+            _celebrationSubject = State(initialValue: "")
+            _celebrationVenue = State(initialValue: "")
+            _celebrationMenu = State(initialValue: "")
+            _singleDayCelebration = State(initialValue: defaultKind == .celebration)
             _airlineName = State(initialValue: "")
             _bookingReference = State(initialValue: "")
             _mainAccommodation = State(initialValue: "")
@@ -1063,109 +1243,266 @@ struct HolidayTripEditorSheet: View {
         return (trip.participants ?? []).sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section(String(localized: "trip.section")) {
-                    TextField(String(localized: "trip.trip.name"), text: $name, prompt: Text(String(localized: "trip.trip.prompt")))
-                }
-                HolidayCoverImageFormSection(
-                    coverImageData: $coverImageData,
-                    coverPlaceName: $coverPlaceName,
-                    coverLatitude: $coverLatitude,
-                    coverLongitude: $coverLongitude,
-                    footerText: String(localized: "trip.cover.footer")
-                )
-                Section(String(localized: "trip.dates")) {
-                    DatePicker(String(localized: "trip.date.start"), selection: $start, in: startPickerRange, displayedComponents: .date)
-                        .onChange(of: start) { _, newStart in
-                            let cal = Calendar.current
-                            let s = cal.startOfDay(for: newStart)
-                            start = s
-                            var e = cal.startOfDay(for: end)
-                            if e < s { e = s }
-                            if !isEditing, !defaultsToFuture {
-                                let t = cal.startOfDay(for: Date())
-                                if e > t { e = t }
-                            }
-                            end = e
-                        }
-                    DatePicker(String(localized: "trip.date.end"), selection: $end, in: endPickerRange, displayedComponents: .date)
-                        .onChange(of: end) { _, newEnd in
-                            let cal = Calendar.current
-                            var s = cal.startOfDay(for: start)
-                            var e = cal.startOfDay(for: newEnd)
-                            if !isEditing, !defaultsToFuture {
-                                let t = cal.startOfDay(for: Date())
-                                if e > t { e = t }
-                            }
-                            if e < s { s = e }
-                            start = s
-                            end = e
-                        }
-                }
-                Section(String(localized: "trip.travel.stay.section")) {
-                    TextField(String(localized: "trip.airline"), text: $airlineName)
-                    TextField(String(localized: "trip.reference.field"), text: $bookingReference)
-                    TextField(String(localized: "trip.main_accommodation"), text: $mainAccommodation, axis: .vertical)
-                        .lineLimit(2 ... 5)
-                }
-                Section(String(localized: "trip.notes")) {
-                    TextEditor(text: $notes)
-                        .frame(minHeight: 120)
-                }
-                if isEditing, trip != nil {
-                    Section(String(localized: "trip.travellers")) {
-                        if editorParticipantsSorted.isEmpty {
-                            Text(String(localized: "trip.travellers.none.hint"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(editorParticipantsSorted, id: \.persistentModelID) { p in
-                                Button {
-                                    editingParticipant = p
-                                } label: {
-                                    HStack(alignment: .firstTextBaseline) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(p.displayName.isEmpty ? String(localized: "common.unnamed") : p.displayName)
-                                            if !p.roleTag.isEmpty {
-                                                Text(p.roleTag)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                        }
-                                        Spacer(minLength: 8)
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                            }
-                        }
-                        Button {
-                            showAddTravelersInEditor = true
-                        } label: {
-                            Label(String(localized: "trip.add_travellers"), systemImage: "person.badge.plus")
-                        }
+    private var vacationHomeProperties: [Property] {
+        allProperties.filter { !$0.isArchived && $0.isVacationHome }
+    }
+
+    private var editorNavigationTitle: String {
+        if tripKind == .celebration {
+            if isEditing { return String(localized: "celebration.edit") }
+            return defaultsToFuture ? String(localized: "celebration.new") : String(localized: "celebration.log_past")
+        }
+        if isEditing { return String(localized: "trip.edit_trip") }
+        return defaultsToFuture ? String(localized: "trip.new_trip") : String(localized: "trip.log_past")
+    }
+
+    @ViewBuilder
+    private var celebrationEditorSections: some View {
+        Section(String(localized: "celebration.editor.event_section")) {
+            TextField(String(localized: "celebration.event_name"), text: $name, prompt: Text(String(localized: "celebration.event_name.prompt")))
+            TextField(String(localized: "celebration.subject.label"), text: $celebrationSubject, prompt: Text(String(localized: "celebration.subject.placeholder")), axis: .vertical)
+                .lineLimit(2 ... 4)
+        }
+        HolidayCoverImageFormSection(
+            coverImageData: $coverImageData,
+            coverPlaceName: $coverPlaceName,
+            coverLatitude: $coverLatitude,
+            coverLongitude: $coverLongitude,
+            footerText: String(localized: "celebration.cover.footer")
+        )
+        Section(String(localized: "celebration.when")) {
+            Toggle(String(localized: "celebration.single_day"), isOn: $singleDayCelebration)
+                .onChange(of: singleDayCelebration) { _, isSingle in
+                    if isSingle {
+                        end = Calendar.current.startOfDay(for: start)
                     }
                 }
-                if !isEditing {
-                    if defaultsToFuture {
-                        Section {
-                            Text(String(localized: "trip.travellers.footer.future"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        Section {
-                            Text(String(localized: "trip.travellers.footer.past"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+            DatePicker(
+                singleDayCelebration ? String(localized: "celebration.date") : String(localized: "trip.date.start"),
+                selection: $start,
+                in: startPickerRange,
+                displayedComponents: .date
+            )
+            .onChange(of: start) { _, newStart in
+                let cal = Calendar.current
+                let s = cal.startOfDay(for: newStart)
+                start = s
+                if singleDayCelebration {
+                    end = s
+                } else {
+                    var e = cal.startOfDay(for: end)
+                    if e < s { e = s }
+                    end = e
+                }
+            }
+            if !singleDayCelebration {
+                DatePicker(String(localized: "trip.date.end"), selection: $end, in: endPickerRange, displayedComponents: .date)
+            }
+        }
+        Section(String(localized: "celebration.venue")) {
+            TextField(String(localized: "celebration.venue.placeholder"), text: $celebrationVenue, axis: .vertical)
+                .lineLimit(2 ... 4)
+        }
+        Section(String(localized: "celebration.menu")) {
+            TextEditor(text: $celebrationMenu)
+                .frame(minHeight: 100)
+        }
+        Section(String(localized: "celebration.notes")) {
+            TextEditor(text: $notes)
+                .frame(minHeight: 80)
+        }
+        celebrationParticipantsEditorSection
+        if !isEditing {
+            Section {
+                Text(String(localized: "celebration.editor.footer"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tripEditorSections: some View {
+        Section(String(localized: "trip.section")) {
+            TextField(String(localized: "trip.trip.name"), text: $name, prompt: Text(String(localized: "trip.trip.prompt")))
+        }
+        HolidayCoverImageFormSection(
+            coverImageData: $coverImageData,
+            coverPlaceName: $coverPlaceName,
+            coverLatitude: $coverLatitude,
+            coverLongitude: $coverLongitude,
+            footerText: String(localized: "trip.cover.footer")
+        )
+        Section(String(localized: "trip.dates")) {
+            DatePicker(String(localized: "trip.date.start"), selection: $start, in: startPickerRange, displayedComponents: .date)
+                .onChange(of: start) { _, newStart in
+                    let cal = Calendar.current
+                    let s = cal.startOfDay(for: newStart)
+                    start = s
+                    var e = cal.startOfDay(for: end)
+                    if e < s { e = s }
+                    if !isEditing, !defaultsToFuture {
+                        let t = cal.startOfDay(for: Date())
+                        if e > t { e = t }
+                    }
+                    end = e
+                }
+            DatePicker(String(localized: "trip.date.end"), selection: $end, in: endPickerRange, displayedComponents: .date)
+                .onChange(of: end) { _, newEnd in
+                    let cal = Calendar.current
+                    var s = cal.startOfDay(for: start)
+                    var e = cal.startOfDay(for: newEnd)
+                    if !isEditing, !defaultsToFuture {
+                        let t = cal.startOfDay(for: Date())
+                        if e > t { e = t }
+                    }
+                    if e < s { s = e }
+                    start = s
+                    end = e
+                }
+        }
+        if !vacationHomeProperties.isEmpty {
+            Section(String(localized: "trip.linked_property.section")) {
+                Picker(String(localized: "trip.linked_property.label"), selection: $linkedProperty) {
+                    Text(String(localized: "trip.linked_property.none"))
+                        .tag(nil as Property?)
+                    ForEach(vacationHomeProperties) { property in
+                        Text(
+                            property.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? String(localized: "property.unnamed")
+                                : property.name
+                        )
+                        .tag(property as Property?)
                     }
                 }
             }
-            .navigationTitle(isEditing ? String(localized: "trip.edit_trip") : (defaultsToFuture ? String(localized: "trip.new_trip") : String(localized: "trip.log_past")))
+        }
+        Section(String(localized: "trip.travel.stay.section")) {
+            TextField(String(localized: "trip.airline"), text: $airlineName)
+            TextField(String(localized: "trip.reference.field"), text: $bookingReference)
+            TextField(String(localized: "trip.main_accommodation"), text: $mainAccommodation, axis: .vertical)
+                .lineLimit(2 ... 5)
+        }
+        Section(String(localized: "trip.notes")) {
+            TextEditor(text: $notes)
+                .frame(minHeight: 120)
+        }
+        tripParticipantsEditorSection
+        if !isEditing {
+            if defaultsToFuture {
+                Section {
+                    Text(String(localized: "trip.travellers.footer.future"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section {
+                    Text(String(localized: "trip.travellers.footer.past"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var celebrationParticipantsEditorSection: some View {
+        if isEditing, trip != nil {
+            Section(String(localized: "celebration.family_attendees")) {
+                if editorParticipantsSorted.isEmpty {
+                    Text(String(localized: "celebration.family_empty"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(editorParticipantsSorted, id: \.persistentModelID) { p in
+                        Button {
+                            editingParticipant = p
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(p.displayName.isEmpty ? String(localized: "common.unnamed") : p.displayName)
+                                    Text(p.rsvpStatus.displayTitle)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+                Button {
+                    showAddTravelersInEditor = true
+                } label: {
+                    Label(String(localized: "celebration.add_family"), systemImage: "person.badge.plus")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tripParticipantsEditorSection: some View {
+        if isEditing, trip != nil {
+            Section(String(localized: "trip.travellers")) {
+                if editorParticipantsSorted.isEmpty {
+                    Text(String(localized: "trip.travellers.none.hint"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(editorParticipantsSorted, id: \.persistentModelID) { p in
+                        Button {
+                            editingParticipant = p
+                        } label: {
+                            HStack(alignment: .firstTextBaseline) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(p.displayName.isEmpty ? String(localized: "common.unnamed") : p.displayName)
+                                    if !p.roleTag.isEmpty {
+                                        Text(p.roleTag)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                }
+                Button {
+                    showAddTravelersInEditor = true
+                } label: {
+                    Label(String(localized: "trip.add_travellers"), systemImage: "person.badge.plus")
+                }
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(String(localized: "trip.kind.section")) {
+                    Picker(String(localized: "trip.kind.label"), selection: $tripKind) {
+                        ForEach(HolidayTripKind.allCases) { kind in
+                            Label(kind.displayTitle, systemImage: kind.systemImage).tag(kind)
+                        }
+                    }
+                    .onChange(of: tripKind) { _, newKind in
+                        if newKind == .celebration {
+                            linkedProperty = nil
+                        }
+                    }
+                }
+                if tripKind == .celebration {
+                    celebrationEditorSections
+                } else {
+                    tripEditorSections
+                }
+            }
+            .navigationTitle(editorNavigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -1192,11 +1529,11 @@ struct HolidayTripEditorSheet: View {
             }
             .sheet(isPresented: $showAddTravelersInEditor) {
                 if let trip {
-                    AddTripParticipantSheet(trip: trip)
+                    AddTripParticipantSheet(trip: trip, celebrationRSVP: tripKind == .celebration)
                 }
             }
             .sheet(item: $editingParticipant) { p in
-                EditTripParticipantSheet(participant: p)
+                EditTripParticipantSheet(participant: p, celebrationRSVP: tripKind == .celebration)
             }
         }
     }
@@ -1214,6 +1551,9 @@ struct HolidayTripEditorSheet: View {
         let cal = Calendar.current
         let s = cal.startOfDay(for: start)
         var e = cal.startOfDay(for: end)
+        if tripKind == .celebration && singleDayCelebration {
+            e = s
+        }
         if e < s { e = s }
 
         if let existing = trip {
@@ -1222,26 +1562,46 @@ struct HolidayTripEditorSheet: View {
             existing.endDate = e
             existing.notes = notes
             existing.coverImageData = coverImageData
-            existing.airlineName = airlineName
-            existing.bookingReference = bookingReference
-            existing.mainAccommodation = mainAccommodation
             existing.coverPlaceName = coverPlaceName
             existing.coverLatitude = coverLatitude
             existing.coverLongitude = coverLongitude
+            existing.tripKind = tripKind
+            if tripKind == .celebration {
+                existing.celebrationSubject = celebrationSubject
+                existing.celebrationVenue = celebrationVenue
+                existing.celebrationMenu = celebrationMenu
+                existing.linkedProperty = nil
+                existing.airlineName = ""
+                existing.bookingReference = ""
+                existing.mainAccommodation = ""
+            } else {
+                existing.celebrationSubject = ""
+                existing.celebrationVenue = ""
+                existing.celebrationMenu = ""
+                existing.airlineName = airlineName
+                existing.bookingReference = bookingReference
+                existing.mainAccommodation = mainAccommodation
+                existing.linkedProperty = linkedProperty
+            }
         } else {
             let newTrip = HolidayTrip(
                 tripName: trimmedName,
                 startDate: s,
                 endDate: e,
+                tripKind: tripKind,
                 notes: notes,
-                airlineName: airlineName,
-                bookingReference: bookingReference,
-                mainAccommodation: mainAccommodation,
+                celebrationSubject: tripKind == .celebration ? celebrationSubject : "",
+                celebrationVenue: tripKind == .celebration ? celebrationVenue : "",
+                celebrationMenu: tripKind == .celebration ? celebrationMenu : "",
+                airlineName: tripKind == .trip ? airlineName : "",
+                bookingReference: tripKind == .trip ? bookingReference : "",
+                mainAccommodation: tripKind == .trip ? mainAccommodation : "",
                 coverImageData: coverImageData,
                 coverPlaceName: coverPlaceName,
                 coverLatitude: coverLatitude,
                 coverLongitude: coverLongitude
             )
+            newTrip.linkedProperty = tripKind == .trip ? linkedProperty : nil
             modelContext.insert(newTrip)
         }
         do {
@@ -1257,27 +1617,32 @@ struct HolidayTripEditorSheet: View {
 /// Presents `HolidayTripEditorSheet` in create mode (same defaults as before).
 struct AddHolidayTripSheet: View {
     var defaultsToFuture: Bool
+    var defaultKind: HolidayTripKind = .trip
 
     var body: some View {
-        HolidayTripEditorSheet(trip: nil, defaultsToFuture: defaultsToFuture)
+        HolidayTripEditorSheet(trip: nil, defaultsToFuture: defaultsToFuture, defaultKind: defaultKind)
     }
 }
 
-private struct EditTripParticipantSheet: View {
+struct EditTripParticipantSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
     @Bindable var participant: HolidayTripParticipant
+    var celebrationRSVP: Bool = false
 
     @State private var displayName: String
     @State private var roleTag: String
+    @State private var rsvpStatus: HolidayRSVPStatus
     @State private var saveFailedMessage: String?
     @State private var confirmRemove = false
 
-    init(participant: HolidayTripParticipant) {
+    init(participant: HolidayTripParticipant, celebrationRSVP: Bool = false) {
         self.participant = participant
+        self.celebrationRSVP = celebrationRSVP
         _displayName = State(initialValue: participant.displayName)
         _roleTag = State(initialValue: participant.roleTag)
+        _rsvpStatus = State(initialValue: participant.rsvpStatus)
     }
 
     private var trimmedName: String {
@@ -1290,6 +1655,11 @@ private struct EditTripParticipantSheet: View {
                 Section(String(localized: "trip.traveller.section")) {
                     TextField(String(localized: "common.name"), text: $displayName)
                     TextField(String(localized: "trip.role.optional"), text: $roleTag, prompt: Text(String(localized: "trip.role.prompt")))
+                }
+                if celebrationRSVP {
+                    Section(String(localized: "trip.guest.rsvp")) {
+                        HolidayRSVPStatusPicker(status: $rsvpStatus)
+                    }
                 }
                 Section {
                     Button(String(localized: "trip.remove_from_trip"), role: .destructive) {
@@ -1335,6 +1705,9 @@ private struct EditTripParticipantSheet: View {
     private func save() {
         participant.displayName = trimmedName
         participant.roleTag = roleTag.trimmingCharacters(in: .whitespacesAndNewlines)
+        if celebrationRSVP {
+            participant.rsvpStatus = rsvpStatus
+        }
         do {
             try modelContext.save()
             dismiss()
@@ -1356,129 +1729,15 @@ private struct EditTripParticipantSheet: View {
     }
 }
 
-private struct AddTripParticipantSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-
+struct AddTripParticipantSheet: View {
     let trip: HolidayTrip
-
-    @State private var selectedFamily: Set<String> = []
-    @State private var customName = ""
-    @State private var roleTag = ""
-    @State private var saveFailedMessage: String?
-
-    private let familyNames = ["Pappa", "Mamma", "CC", "Herman"]
-
-    private var trimmedCustom: String {
-        customName.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var canAdd: Bool {
-        !selectedFamily.isEmpty || !trimmedCustom.isEmpty
-    }
-
-    /// Names to insert, in a stable order: family list order first, then custom if present and not redundant.
-    private var namesToInsert: [String] {
-        var names: [String] = []
-        for n in familyNames where selectedFamily.contains(n) {
-            names.append(n)
-        }
-        if !trimmedCustom.isEmpty, !names.contains(trimmedCustom) {
-            names.append(trimmedCustom)
-        }
-        return names
-    }
+    var celebrationRSVP: Bool = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section(String(localized: "trip.family")) {
-                    Text(trip.isPastTrip ? String(localized: "trip.family.hint.past") : String(localized: "trip.family.hint.future"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ForEach(familyNames, id: \.self) { name in
-                        Toggle(isOn: bindingForFamily(name)) {
-                            Text(name)
-                                .font(.body.weight(.medium))
-                        }
-                    }
-                }
-                Section(String(localized: "trip.also_add")) {
-                    TextField(String(localized: "trip.custom.prompt"), text: $customName)
-                    Button {
-                        customName = String(localized: "trip.guest_name")
-                    } label: {
-                        Label(String(localized: "trip.use_guest"), systemImage: "person.fill.questionmark")
-                    }
-                }
-                Section(String(localized: "trip.role_all")) {
-                    TextField(String(localized: "trip.shown_under"), text: $roleTag, prompt: Text(String(localized: "trip.role.prompt2")))
-                }
-            }
-            .navigationTitle(String(localized: "trip.add_travelers.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(addButtonTitle) {
-                        addParticipants()
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(!canAdd)
-                }
-            }
-            .alert(String(localized: "trip.couldnt_save_travelers"), isPresented: Binding(
-                get: { saveFailedMessage != nil },
-                set: { if !$0 { saveFailedMessage = nil } }
-            )) {
-                Button(String(localized: "common.ok"), role: .cancel) { saveFailedMessage = nil }
-            } message: {
-                Text(saveFailedMessage ?? "")
-            }
-        }
-    }
-
-    private var addButtonTitle: String {
-        let n = namesToInsert.count
-        if n <= 1 { return String(localized: "common.add") }
-        return String(format: String(localized: "trip.add_n"), locale: .current, n)
-    }
-
-    private func bindingForFamily(_ name: String) -> Binding<Bool> {
-        Binding(
-            get: { selectedFamily.contains(name) },
-            set: { on in
-                if on {
-                    selectedFamily.insert(name)
-                } else {
-                    selectedFamily.remove(name)
-                }
-            }
+        HolidayPartyInviteSheet(
+            target: .familyAttendees(trip),
+            celebrationRSVP: celebrationRSVP
         )
-    }
-
-    private func addParticipants() {
-        let role = roleTag.trimmingCharacters(in: .whitespacesAndNewlines)
-        var order = ((trip.participants ?? []).map(\.sortOrder).max() ?? -1) + 1
-        for name in namesToInsert {
-            let p = HolidayTripParticipant(
-                displayName: name,
-                roleTag: role,
-                sortOrder: order,
-                trip: trip
-            )
-            modelContext.insert(p)
-            order += 1
-        }
-        do {
-            try modelContext.save()
-            dismiss()
-        } catch {
-            print("[TheGomsons] Failed to save trip participants: \(error.localizedDescription)")
-            saveFailedMessage = error.localizedDescription
-        }
     }
 }
 
@@ -1698,7 +1957,7 @@ private struct HolidayTripReviewPhotoViewer: View {
     }
 }
 
-private extension HolidayTrip {
+extension HolidayTrip {
     var coverUIImage: UIImage? {
         guard let data = coverImageData else { return nil }
         return UIImage(data: data)

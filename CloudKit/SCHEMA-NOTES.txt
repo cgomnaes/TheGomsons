@@ -87,6 +87,12 @@ cannot drop fields). Import to Development, then Deploy Schema to Production.
 Holiday reviews: CD_reviewText (+ review photo BYTES/_ckAsset) on CD_HolidayTrip — must be
 in Production before past-trip reviews sync.
 
+Celebrations / party planner: CD_tripKindRaw, CD_celebrationSubject, CD_celebrationVenue,
+CD_celebrationMenu, CD_linkedProperty on CD_HolidayTrip; CD_isAttending + CD_rsvpStatusRaw on
+CD_HolidayTripParticipant; new RECORD TYPE CD_HolidayTripGuest. CD_sortOrder on CD_Property.
+Missing any of these in Production → export partialFailure (error 2) when saving trips,
+celebrations, property order, or subscriptions (CD_expiryDate / CD_includeInSummary).
+
 If Xcode shows Partial Failure (2) with nested "Network Failure (4); Fetching asset failed"
 on CD_FamilyPerson (same record UUIDs every retry): CloudKit cannot download photo assets
 (CD_photoData_ckAsset). Export can still succeed. Fix: clear/re-upload those photos in the
@@ -100,6 +106,11 @@ From Xcode “Cannot create or modify field / Cannot create new type … in prod
   □ CD_depositAmount (+ rental fields above) on CD_Property
   □ CD_propertyRegisterURL on CD_Property (if not already deployed)
   □ CD_reviewText (+ review photo fields) on CD_HolidayTrip
+  □ CD_tripKindRaw, celebration fields, CD_linkedProperty on CD_HolidayTrip
+  □ CD_isAttending, CD_rsvpStatusRaw on CD_HolidayTripParticipant
+  □ RECORD TYPE CD_HolidayTripGuest
+  □ CD_sortOrder on CD_Property
+  □ CD_expiryDate, CD_includeInSummary on CD_Subscription (if subscriptions fail export)
   □ RECORD TYPE CD_HolidayPlanItem
   □ CDMR — only if non-empty (Console blocks empty CDMR promote); otherwise deploy without it first
 1. Import CloudKit/PublicSchema.ckdb → Development (cktool or Console).

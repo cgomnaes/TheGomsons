@@ -15,7 +15,7 @@ struct AddInventoryItemView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
 
-    @Query(sort: \Property.name) private var properties: [Property]
+    @Query(sort: [SortDescriptor(\Property.sortOrder), SortDescriptor(\Property.name)]) private var properties: [Property]
 
     private let itemToEdit: InventoryItem?
     private let defaultProperty: Property?
@@ -72,7 +72,7 @@ struct AddInventoryItemView: View {
     }
 
     init(itemToEdit: InventoryItem? = nil, defaultProperty: Property? = nil) {
-        _properties = Query(sort: \Property.name)
+        _properties = Query(sort: [SortDescriptor(\Property.sortOrder), SortDescriptor(\Property.name)])
         self.itemToEdit = itemToEdit
         self.defaultProperty = defaultProperty
         if let item = itemToEdit {

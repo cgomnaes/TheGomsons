@@ -15,6 +15,30 @@ enum FamilyKinship {
         case unknown
     }
 
+    /// Internal kind so in-law mapping does not depend on English display strings.
+    enum Kind: Equatable {
+        case you
+        case partner
+        case mother, father, parent
+        case daughter, son, child
+        case sister, brother, sibling
+        case grandmother, grandfather, grandparent
+        case greatGrandmother, greatGrandfather, greatGrandparent
+        case granddaughter, grandson, grandchild
+        case greatGranddaughter, greatGrandson, greatGrandchild
+        case aunt, uncle, auntOrUncle
+        case greatAunt, greatUncle, greatAuntOrUncle
+        case niece, nephew, nieceOrNephew
+        case grandniece, grandnephew, grandnieceOrNephew
+        case cousin, cousinFemale, cousinMale, secondCousin
+        case parentInLaw
+        case sisterInLaw, brotherInLaw, siblingInLaw
+        case daughterInLaw, sonInLaw, childInLaw
+        case parentsPartner
+        case relative
+        case extended
+    }
+
     /// Prefer mother/father roles already recorded in the tree.
     static func inferredSex(of person: FamilyPerson) -> InferredSex {
         if !(person.childrenWhereMother ?? []).isEmpty { return .female }
@@ -28,73 +52,72 @@ enum FamilyKinship {
         relativeTo me: FamilyPerson,
         among universe: [FamilyPerson]
     ) -> String {
+        kind(of: other, relativeTo: me, among: universe).localizedName(partnerStatus: me.displayPartnerStatus)
+    }
+
+    static func kind(
+        of other: FamilyPerson,
+        relativeTo me: FamilyPerson,
+        among universe: [FamilyPerson]
+    ) -> Kind {
         if other.persistentModelID == me.persistentModelID {
-            return "You"
+            return .you
         }
 
         if let partner = me.resolvedPartner,
            partner.persistentModelID == other.persistentModelID {
-            return me.displayPartnerStatus?.displayTitle ?? "Partner"
+            return .partner
         }
 
         let ids = Set(universe.map(\.persistentModelID))
         guard ids.contains(other.persistentModelID), ids.contains(me.persistentModelID) else {
-            return "Extended family"
+            return .extended
         }
 
-        // Direct parent links (most reliable gendered labels).
-        if me.mother?.persistentModelID == other.persistentModelID { return "Mother" }
-        if me.father?.persistentModelID == other.persistentModelID { return "Father" }
+        if me.mother?.persistentModelID == other.persistentModelID { return .mother }
+        if me.father?.persistentModelID == other.persistentModelID { return .father }
 
-        // Direct children.
         let myKids = FamilyTreeHierarchyBuilder.mergedChildren(for: me, in: universe)
         if myKids.contains(where: { $0.persistentModelID == other.persistentModelID }) {
-            return childLabel(for: other)
+            return childKind(for: other)
         }
 
-        // Blood kinship via lowest common ancestor.
-        if let blood = bloodLabel(of: other, relativeTo: me, among: universe) {
+        if let blood = bloodKind(of: other, relativeTo: me, among: universe) {
             return blood
         }
 
-        // In-laws / step relations through partner.
         if let partner = me.resolvedPartner, ids.contains(partner.persistentModelID),
-           let viaPartner = bloodLabel(of: other, relativeTo: partner, among: universe) {
-            return inLawLabel(mapping: viaPartner, other: other)
+           let viaPartner = bloodKind(of: other, relativeTo: partner, among: universe) {
+            return inLawKind(mapping: viaPartner, other: other)
         }
 
-        // Partner of a close blood relative.
-        if let through = partnerOfCloseRelativeLabel(of: other, relativeTo: me, among: universe) {
+        if let through = partnerOfCloseRelativeKind(of: other, relativeTo: me, among: universe) {
             return through
         }
 
-        // Connected somehow in the visible graph?
         if isConnected(me, other, among: universe) {
-            return "Relative"
+            return .relative
         }
-        return "Extended family"
+        return .extended
     }
 
     // MARK: - Blood path (LCA)
 
-    private static func bloodLabel(
+    private static func bloodKind(
         of other: FamilyPerson,
         relativeTo me: FamilyPerson,
         among universe: [FamilyPerson]
-    ) -> String? {
+    ) -> Kind? {
         let myAncestors = ancestorDepths(from: me)
         let theirAncestors = ancestorDepths(from: other)
 
-        // `other` is an ancestor of `me`
         if let up = myAncestors[other.persistentModelID] {
-            return ancestorLabel(generationsUp: up, person: other)
+            return ancestorKind(generationsUp: up, person: other)
         }
-        // `me` is an ancestor of `other`
         if let down = theirAncestors[me.persistentModelID] {
-            return descendantLabel(generationsDown: down, person: other)
+            return descendantKind(generationsDown: down, person: other)
         }
 
-        // LCA among shared ancestors (including each person as ancestor of themselves at depth 0).
         var myMap = myAncestors
         myMap[me.persistentModelID] = 0
         var theirMap = theirAncestors
@@ -118,42 +141,36 @@ enum FamilyKinship {
         let gMe = lca.genMe
         let gOther = lca.genOther
 
-        // Same person handled earlier; siblings / cousins / aunts …
-        if gMe == 0, gOther == 0 { return "You" }
+        if gMe == 0, gOther == 0 { return .you }
         if gMe == 1, gOther == 1 {
-            return siblingLabel(for: other)
+            return siblingKind(for: other)
         }
         if gMe == 1, gOther == 0 {
-            // LCA is `other` → already handled as ancestor
-            return ancestorLabel(generationsUp: 1, person: other)
+            return ancestorKind(generationsUp: 1, person: other)
         }
         if gMe == 0, gOther == 1 {
-            return childLabel(for: other)
+            return childKind(for: other)
         }
 
-        // Aunt / uncle: parent's sibling (or sibling of grandparent = great-aunt, etc.)
         if gOther == 1, gMe >= 2 {
-            return collateralUpLabel(generationsUp: gMe, person: other)
+            return collateralUpKind(generationsUp: gMe, person: other)
         }
-        // Niece / nephew
         if gMe == 1, gOther >= 2 {
-            return collateralDownLabel(generationsDown: gOther, person: other)
+            return collateralDownKind(generationsDown: gOther, person: other)
         }
-        // Cousins (same generation under a shared ancestor)
         if gMe >= 2, gOther >= 2, gMe == gOther {
-            if gMe == 2 { return "Cousin" }
-            if gMe == 3 { return "Second cousin" }
-            return "Relative"
+            if gMe == 2 { return cousinKind(for: other) }
+            if gMe == 3 { return .secondCousin }
+            return .relative
         }
-        // Removed cousins / uneven cousins — keep simple.
         if gMe >= 2, gOther >= 2 {
-            return "Relative"
+            return .relative
         }
 
         if gMe + gOther >= 5 {
-            return "Extended family"
+            return .extended
         }
-        return "Relative"
+        return .relative
     }
 
     /// Depths of blood ancestors only (mother/father walk). Self not included.
@@ -175,169 +192,173 @@ enum FamilyKinship {
         return result
     }
 
-    private static func ancestorLabel(generationsUp: Int, person: FamilyPerson) -> String {
+    private static func ancestorKind(generationsUp: Int, person: FamilyPerson) -> Kind {
         let sex = inferredSex(of: person)
         switch generationsUp {
         case 1:
             switch sex {
-            case .female: return "Mother"
-            case .male: return "Father"
-            case .unknown: return "Parent"
+            case .female: return .mother
+            case .male: return .father
+            case .unknown: return .parent
             }
         case 2:
             switch sex {
-            case .female: return "Grandmother"
-            case .male: return "Grandfather"
-            case .unknown: return "Grandparent"
+            case .female: return .grandmother
+            case .male: return .grandfather
+            case .unknown: return .grandparent
             }
         case 3:
             switch sex {
-            case .female: return "Great-grandmother"
-            case .male: return "Great-grandfather"
-            case .unknown: return "Great-grandparent"
+            case .female: return .greatGrandmother
+            case .male: return .greatGrandfather
+            case .unknown: return .greatGrandparent
             }
         default:
-            return "Extended family"
+            return .extended
         }
     }
 
-    private static func descendantLabel(generationsDown: Int, person: FamilyPerson) -> String {
-        let sex = inferredSex(of: person)
+    private static func descendantKind(generationsDown: Int, person: FamilyPerson) -> Kind {
         switch generationsDown {
         case 1:
-            return childLabel(for: person)
+            return childKind(for: person)
         case 2:
-            switch sex {
-            case .female: return "Granddaughter"
-            case .male: return "Grandson"
-            case .unknown: return "Grandchild"
+            switch inferredSex(of: person) {
+            case .female: return .granddaughter
+            case .male: return .grandson
+            case .unknown: return .grandchild
             }
         case 3:
-            switch sex {
-            case .female: return "Great-granddaughter"
-            case .male: return "Great-grandson"
-            case .unknown: return "Great-grandchild"
+            switch inferredSex(of: person) {
+            case .female: return .greatGranddaughter
+            case .male: return .greatGrandson
+            case .unknown: return .greatGrandchild
             }
         default:
-            return "Extended family"
+            return .extended
         }
     }
 
-    private static func childLabel(for person: FamilyPerson) -> String {
+    private static func childKind(for person: FamilyPerson) -> Kind {
         switch inferredSex(of: person) {
-        case .female: return "Daughter"
-        case .male: return "Son"
-        case .unknown: return "Child"
+        case .female: return .daughter
+        case .male: return .son
+        case .unknown: return .child
         }
     }
 
-    private static func siblingLabel(for person: FamilyPerson) -> String {
+    private static func siblingKind(for person: FamilyPerson) -> Kind {
         switch inferredSex(of: person) {
-        case .female: return "Sister"
-        case .male: return "Brother"
-        case .unknown: return "Sibling"
+        case .female: return .sister
+        case .male: return .brother
+        case .unknown: return .sibling
+        }
+    }
+
+    private static func cousinKind(for person: FamilyPerson) -> Kind {
+        switch inferredSex(of: person) {
+        case .female: return .cousinFemale
+        case .male: return .cousinMale
+        case .unknown: return .cousin
         }
     }
 
     /// Parent’s sibling, grandparent’s sibling, …
-    private static func collateralUpLabel(generationsUp: Int, person: FamilyPerson) -> String {
+    private static func collateralUpKind(generationsUp: Int, person: FamilyPerson) -> Kind {
         let sex = inferredSex(of: person)
         switch generationsUp {
         case 2:
             switch sex {
-            case .female: return "Aunt"
-            case .male: return "Uncle"
-            case .unknown: return "Aunt/Uncle"
+            case .female: return .aunt
+            case .male: return .uncle
+            case .unknown: return .auntOrUncle
             }
         case 3:
             switch sex {
-            case .female: return "Great-aunt"
-            case .male: return "Great-uncle"
-            case .unknown: return "Great-aunt/uncle"
+            case .female: return .greatAunt
+            case .male: return .greatUncle
+            case .unknown: return .greatAuntOrUncle
             }
         default:
-            return "Extended family"
+            return .extended
         }
     }
 
-    private static func collateralDownLabel(generationsDown: Int, person: FamilyPerson) -> String {
+    private static func collateralDownKind(generationsDown: Int, person: FamilyPerson) -> Kind {
         let sex = inferredSex(of: person)
         switch generationsDown {
         case 2:
             switch sex {
-            case .female: return "Niece"
-            case .male: return "Nephew"
-            case .unknown: return "Niece/Nephew"
+            case .female: return .niece
+            case .male: return .nephew
+            case .unknown: return .nieceOrNephew
             }
         case 3:
             switch sex {
-            case .female: return "Grandniece"
-            case .male: return "Grandnephew"
-            case .unknown: return "Grandniece/nephew"
+            case .female: return .grandniece
+            case .male: return .grandnephew
+            case .unknown: return .grandnieceOrNephew
             }
         default:
-            return "Extended family"
+            return .extended
         }
     }
 
-    private static func inLawLabel(mapping bloodAsIfPartner: String, other: FamilyPerson) -> String {
+    private static func inLawKind(mapping bloodAsIfPartner: Kind, other: FamilyPerson) -> Kind {
         switch bloodAsIfPartner {
-        case "Mother", "Father", "Parent":
-            return "Parent-in-law"
-        case "Sister", "Brother", "Sibling":
+        case .mother, .father, .parent:
+            return .parentInLaw
+        case .sister, .brother, .sibling:
             switch inferredSex(of: other) {
-            case .female: return "Sister-in-law"
-            case .male: return "Brother-in-law"
-            case .unknown: return "Sibling-in-law"
+            case .female: return .sisterInLaw
+            case .male: return .brotherInLaw
+            case .unknown: return .siblingInLaw
             }
-        case "Daughter", "Son", "Child":
+        case .daughter, .son, .child:
             switch inferredSex(of: other) {
-            case .female: return "Daughter-in-law"
-            case .male: return "Son-in-law"
-            case .unknown: return "Child-in-law"
+            case .female: return .daughterInLaw
+            case .male: return .sonInLaw
+            case .unknown: return .childInLaw
             }
-        case "Grandmother", "Grandfather", "Grandparent":
-            return "Relative"
-        case "Aunt", "Uncle", "Aunt/Uncle":
-            return "Relative"
+        case .you:
+            return .partner
         default:
-            if bloodAsIfPartner == "You" { return "Partner" }
-            return "Relative"
+            return .relative
         }
     }
 
-    private static func partnerOfCloseRelativeLabel(
+    private static func partnerOfCloseRelativeKind(
         of other: FamilyPerson,
         relativeTo me: FamilyPerson,
         among universe: [FamilyPerson]
-    ) -> String? {
+    ) -> Kind? {
         guard let theirPartner = other.resolvedPartner else { return nil }
-        guard let blood = bloodLabel(of: theirPartner, relativeTo: me, among: universe) else { return nil }
+        guard let blood = bloodKind(of: theirPartner, relativeTo: me, among: universe) else { return nil }
         switch blood {
-        case "Mother", "Father", "Parent":
-            return "Parent’s partner"
-        case "Sister", "Brother", "Sibling":
+        case .mother, .father, .parent:
+            return .parentsPartner
+        case .sister, .brother, .sibling:
             switch inferredSex(of: other) {
-            case .female: return "Sister-in-law"
-            case .male: return "Brother-in-law"
-            case .unknown: return "Sibling-in-law"
+            case .female: return .sisterInLaw
+            case .male: return .brotherInLaw
+            case .unknown: return .siblingInLaw
             }
-        case "Daughter", "Son", "Child":
+        case .daughter, .son, .child:
             switch inferredSex(of: other) {
-            case .female: return "Daughter-in-law"
-            case .male: return "Son-in-law"
-            case .unknown: return "Child-in-law"
+            case .female: return .daughterInLaw
+            case .male: return .sonInLaw
+            case .unknown: return .childInLaw
             }
-        case "Aunt", "Uncle", "Aunt/Uncle":
+        case .aunt, .uncle, .auntOrUncle:
             switch inferredSex(of: other) {
-            case .female: return "Aunt"
-            case .male: return "Uncle"
-            case .unknown: return "Aunt/Uncle"
+            case .female: return .aunt
+            case .male: return .uncle
+            case .unknown: return .auntOrUncle
             }
-        case "You":
-            return me.displayPartnerStatus?.displayTitle ?? "Partner"
+        case .you:
+            return .partner
         default:
-            return "Relative"
+            return .relative
         }
     }
 
@@ -366,5 +387,61 @@ enum FamilyKinship {
             }
         }
         return false
+    }
+}
+
+extension FamilyKinship.Kind {
+    func localizedName(partnerStatus: PartnerRelationshipStatus? = nil) -> String {
+        switch self {
+        case .you: String(localized: "kinship.you")
+        case .partner: partnerStatus?.displayTitle ?? String(localized: "kinship.partner")
+        case .mother: String(localized: "kinship.mother")
+        case .father: String(localized: "kinship.father")
+        case .parent: String(localized: "kinship.parent")
+        case .daughter: String(localized: "kinship.daughter")
+        case .son: String(localized: "kinship.son")
+        case .child: String(localized: "kinship.child")
+        case .sister: String(localized: "kinship.sister")
+        case .brother: String(localized: "kinship.brother")
+        case .sibling: String(localized: "kinship.sibling")
+        case .grandmother: String(localized: "kinship.grandmother")
+        case .grandfather: String(localized: "kinship.grandfather")
+        case .grandparent: String(localized: "kinship.grandparent")
+        case .greatGrandmother: String(localized: "kinship.great_grandmother")
+        case .greatGrandfather: String(localized: "kinship.great_grandfather")
+        case .greatGrandparent: String(localized: "kinship.great_grandparent")
+        case .granddaughter: String(localized: "kinship.granddaughter")
+        case .grandson: String(localized: "kinship.grandson")
+        case .grandchild: String(localized: "kinship.grandchild")
+        case .greatGranddaughter: String(localized: "kinship.great_granddaughter")
+        case .greatGrandson: String(localized: "kinship.great_grandson")
+        case .greatGrandchild: String(localized: "kinship.great_grandchild")
+        case .aunt: String(localized: "kinship.aunt")
+        case .uncle: String(localized: "kinship.uncle")
+        case .auntOrUncle: String(localized: "kinship.aunt_uncle")
+        case .greatAunt: String(localized: "kinship.great_aunt")
+        case .greatUncle: String(localized: "kinship.great_uncle")
+        case .greatAuntOrUncle: String(localized: "kinship.great_aunt_uncle")
+        case .niece: String(localized: "kinship.niece")
+        case .nephew: String(localized: "kinship.nephew")
+        case .nieceOrNephew: String(localized: "kinship.niece_nephew")
+        case .grandniece: String(localized: "kinship.grandniece")
+        case .grandnephew: String(localized: "kinship.grandnephew")
+        case .grandnieceOrNephew: String(localized: "kinship.grandniece_nephew")
+        case .cousin: String(localized: "kinship.cousin")
+        case .cousinFemale: String(localized: "kinship.cousin_female")
+        case .cousinMale: String(localized: "kinship.cousin_male")
+        case .secondCousin: String(localized: "kinship.second_cousin")
+        case .parentInLaw: String(localized: "kinship.parent_in_law")
+        case .sisterInLaw: String(localized: "kinship.sister_in_law")
+        case .brotherInLaw: String(localized: "kinship.brother_in_law")
+        case .siblingInLaw: String(localized: "kinship.sibling_in_law")
+        case .daughterInLaw: String(localized: "kinship.daughter_in_law")
+        case .sonInLaw: String(localized: "kinship.son_in_law")
+        case .childInLaw: String(localized: "kinship.child_in_law")
+        case .parentsPartner: String(localized: "kinship.parents_partner")
+        case .relative: String(localized: "kinship.relative")
+        case .extended: String(localized: "kinship.extended")
+        }
     }
 }

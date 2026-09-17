@@ -10,20 +10,32 @@ import UIKit
 struct PropertyListView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openFamilyLanding) private var openFamilyLanding
-    @Query(sort: \Property.name) private var allProperties: [Property]
+    @Query(sort: [SortDescriptor(\Property.sortOrder), SortDescriptor(\Property.name)])
+    private var allProperties: [Property]
+    @Query(sort: \HolidayTrip.startDate) private var allHolidayTrips: [HolidayTrip]
 
     @State private var showAddProperty = false
     @State private var showArchived = false
     @State private var showRecipes = false
     @State private var showMaintenance = false
     @State private var showImport = false
+    @State private var editMode: EditMode = .inactive
 
     private var activeProperties: [Property] {
-        allProperties.filter { !$0.isArchived }
+        allProperties
+            .filter { !$0.isArchived }
+            .sorted { lhs, rhs in
+                if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
     }
 
     private var archivedProperties: [Property] {
         allProperties.filter(\.isArchived).sorted { $0.archivedAt > $1.archivedAt }
+    }
+
+    private var upcomingHolidayTrips: [HolidayTrip] {
+        allHolidayTrips.filter { !$0.isPastTrip }
     }
 
     var body: some View {
@@ -42,7 +54,10 @@ struct PropertyListView: View {
                                 NavigationLink {
                                     PropertyDetailView(property: property)
                                 } label: {
-                                    PropertyCardView(property: property)
+                                    PropertyCardView(
+                                        property: property,
+                                        upcomingTrips: upcomingHolidayTrips
+                                    )
                                 }
                                 .buttonStyle(.plain)
                                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -57,6 +72,7 @@ struct PropertyListView: View {
                                     .tint(.orange)
                                 }
                             }
+                            .onMove(perform: moveActiveProperties)
                         }
 
                         if !archivedProperties.isEmpty {
@@ -104,13 +120,17 @@ struct PropertyListView: View {
                     .scrollContentBackground(.hidden)
                 }
             }
+            .environment(\.editMode, $editMode)
             .background(Color(.systemGroupedBackground))
             .navigationTitle(String(localized: "properties.title"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     homeButton { openFamilyLanding() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if !activeProperties.isEmpty {
+                        EditButton()
+                    }
                     Button {
                         showMaintenance = true
                     } label: {
@@ -118,8 +138,7 @@ struct PropertyListView: View {
                             .symbolRenderingMode(.hierarchical)
                     }
                     .accessibilityLabel(String(localized: "maintenance.log_title"))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+                    .disabled(editMode.isEditing)
                     Button {
                         showRecipes = true
                     } label: {
@@ -127,8 +146,7 @@ struct PropertyListView: View {
                             .symbolRenderingMode(.hierarchical)
                     }
                     .accessibilityLabel(String(localized: "recipe.box_title"))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+                    .disabled(editMode.isEditing)
                     Button {
                         showImport = true
                     } label: {
@@ -136,8 +154,7 @@ struct PropertyListView: View {
                             .symbolRenderingMode(.hierarchical)
                     }
                     .accessibilityLabel(String(localized: "properties.import_title"))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+                    .disabled(editMode.isEditing)
                     Button {
                         showAddProperty = true
                     } label: {
@@ -145,6 +162,7 @@ struct PropertyListView: View {
                             .symbolRenderingMode(.hierarchical)
                     }
                     .accessibilityLabel(String(localized: "stash.add_property"))
+                    .disabled(editMode.isEditing)
                 }
             }
             .navigationDestination(isPresented: $showRecipes) {
@@ -162,6 +180,20 @@ struct PropertyListView: View {
         }
     }
 
+    /// Drag-reorder active properties; writes `sortOrder` so CloudKit keeps the order.
+    private func moveActiveProperties(from source: IndexSet, to destination: Int) {
+        var reordered = activeProperties
+        reordered.move(fromOffsets: source, toOffset: destination)
+        for (index, property) in reordered.enumerated() {
+            property.sortOrder = index
+        }
+        do {
+            try modelContext.save()
+        } catch {
+            print("[TheGomsons] Property reorder save failed: \(error.localizedDescription)")
+        }
+    }
+
     private func archiveProperty(_ property: Property) {
         withAnimation {
             property.isArchived = true
@@ -174,6 +206,8 @@ struct PropertyListView: View {
         withAnimation {
             property.isArchived = false
             property.archivedAt = .distantPast
+            // Place restored properties at the end of the active list.
+            property.sortOrder = (activeProperties.map(\.sortOrder).max() ?? -1) + 1
         }
         persistArchiveChange("restore")
     }
@@ -189,6 +223,7 @@ struct PropertyListView: View {
 
 private struct PropertyCardView: View {
     let property: Property
+    var upcomingTrips: [HolidayTrip] = []
     var compact: Bool = false
 
     private var coverHeight: CGFloat { compact ? 120 : 188 }
@@ -252,6 +287,13 @@ private struct PropertyCardView: View {
                 cardMeta
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
+
+                PropertyCabinVisitsSection(
+                    property: property,
+                    upcomingTrips: upcomingTrips
+                )
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
             }
         }
         .background(Color(.secondarySystemGroupedBackground))
@@ -382,6 +424,7 @@ private struct PropertyCardView: View {
 struct AddPropertySheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Property.sortOrder) private var existingProperties: [Property]
 
     @State private var name = ""
     @State private var address = ""
@@ -392,6 +435,8 @@ struct AddPropertySheet: View {
     @State private var tenure: PropertyTenure = .owned
     @State private var bedrooms = ""
     @State private var bathrooms = ""
+    @State private var livingAreaM2 = ""
+    @State private var propertyRegisterURL = ""
     @State private var yearBuilt = ""
     @State private var insuranceCompany = ""
     @State private var landlordOrOwnerName = ""
@@ -410,7 +455,7 @@ struct AddPropertySheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(String(localized: "property.section.property")) {
+                Section {
                     TextField(String(localized: "common.name"), text: $name)
                     TextField(String(localized: "property.field.address"), text: $address, axis: .vertical)
                         .lineLimit(3 ... 6)
@@ -424,6 +469,20 @@ struct AddPropertySheet: View {
                             Text(value.displayTitle).tag(value)
                         }
                     }
+                    TextField(String(localized: "property.living_area"), text: $livingAreaM2)
+                        .keyboardType(.numberPad)
+                    TextField(
+                        String(localized: "property.register_url_placeholder"),
+                        text: $propertyRegisterURL,
+                        axis: .vertical
+                    )
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .lineLimit(2 ... 4)
+                } header: {
+                    Text(String(localized: "property.section.property"))
+                } footer: {
+                    Text(String(localized: "property.register_url_footer"))
                 }
                 Section(String(localized: "property.key_info")) {
                     TextField(String(localized: "property.field.bedrooms"), text: $bedrooms)
@@ -494,6 +553,7 @@ struct AddPropertySheet: View {
                         let yearDigits = String(yearBuilt.filter(\.isNumber).prefix(4))
                         let roomDigits = String(bedrooms.filter(\.isNumber))
                         let bathRaw = bathrooms.replacingOccurrences(of: ",", with: ".").replacingOccurrences(of: " ", with: "")
+                        let nextOrder = (existingProperties.map(\.sortOrder).max() ?? -1) + 1
                         let property = Property(
                             name: name,
                             address: address,
@@ -504,8 +564,9 @@ struct AddPropertySheet: View {
                             tenure: tenure,
                             bedrooms: Int(roomDigits) ?? 0,
                             bathrooms: Double(bathRaw) ?? 0,
-                            livingAreaSqFt: 0,
+                            livingAreaSqFt: Int(livingAreaM2.filter(\.isNumber)) ?? 0,
                             yearBuilt: Int(yearDigits) ?? 0,
+                            propertyRegisterURL: propertyRegisterURL.trimmingCharacters(in: .whitespacesAndNewlines),
                             insuranceCarrier: insuranceCompany,
                             landlordOrOwnerName: tenure == .rented ? landlordOrOwnerName : "",
                             rentalCompanyName: tenure == .rented ? rentalCompanyName : "",
@@ -518,7 +579,8 @@ struct AddPropertySheet: View {
                             leaseEndDate: tenure == .rented && hasLeaseEnd
                                 ? Calendar.current.startOfDay(for: leaseEndDate) : nil,
                             rentalContractReference: tenure == .rented ? rentalContractReference : "",
-                            rentalContractNotes: tenure == .rented ? rentalContractNotes : ""
+                            rentalContractNotes: tenure == .rented ? rentalContractNotes : "",
+                            sortOrder: nextOrder
                         )
                         modelContext.insert(property)
                         do {

@@ -20,6 +20,7 @@ enum PropertiesCSVImport {
         "bedrooms",
         "bathrooms",
         "living_area_m2",
+        "property_register_url",
         "year_built",
         "wifi_network",
         "wifi_password",
@@ -138,6 +139,7 @@ enum PropertiesCSVImport {
                 bedrooms: "2",
                 bathrooms: "1",
                 area: "78",
+                registerURL: "https://eiendomsregisteret.kartverket.no/eiendom/0301/1/1",
                 year: "2012",
                 wifi: "OsloHome",
                 insurance: "If",
@@ -183,7 +185,9 @@ enum PropertiesCSVImport {
             ),
         ]
         let header = templateHeaderLine
-        let body = samples.map { $0.map(csvEscape).joined(separator: ",") }.joined(separator: "\n")
+        let body = samples.map { row in
+            row.map { csvEscape($0) }.joined(separator: ",")
+        }.joined(separator: "\n")
         return header + "\n" + body + "\n"
     }
 
@@ -196,6 +200,7 @@ enum PropertiesCSVImport {
         bedrooms: String = "",
         bathrooms: String = "",
         area: String = "",
+        registerURL: String = "",
         year: String = "",
         wifi: String = "",
         wifiPass: String = "",
@@ -263,7 +268,7 @@ enum PropertiesCSVImport {
         service2Notes: String = ""
     ) -> [String] {
         [
-            name, address, kind, tenure, bedrooms, bathrooms, area, year,
+            name, address, kind, tenure, bedrooms, bathrooms, area, registerURL, year,
             wifi, wifiPass, emergencyNotes, insurance, policy, utilities,
             landlord, rentalCompany, rentalCompanyPhone, rentalCompanyEmail,
             deposit, monthlyRent, leaseStart, leaseEnd, rentalContractRef, rentalContractNotes,
@@ -278,7 +283,8 @@ enum PropertiesCSVImport {
         ]
     }
 
-    private static func csvEscape(_ value: String) -> String {
+    /// Escapes a CSV field. Pure string work — keep off the main actor.
+    private nonisolated static func csvEscape(_ value: String) -> String {
         if value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r") {
             return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }
@@ -288,6 +294,7 @@ enum PropertiesCSVImport {
     /// Short guide shown in the import UI (also works as Google Sheets workflow).
     static var googleSheetsInstructions: String {
         String(localized: "properties.import_sheets_steps")
+            .replacingOccurrences(of: "\\n", with: "\n")
     }
 
     struct Result: Sendable {
@@ -342,6 +349,13 @@ enum PropertiesCSVImport {
         let bedroomsIdx = col("bedrooms", "beds", "br")
         let bathroomsIdx = col("bathrooms", "baths", "ba")
         let areaIdx = col("living_area_m2", "living_area", "area_m2", "sqm", "m2", "livingareasqft")
+        let registerURLIdx = col(
+            "property_register_url",
+            "register_url",
+            "eiendomsregister_url",
+            "kartverket_url",
+            "cadastral_url"
+        )
         let yearIdx = col("year_built", "year", "built")
         let wifiNetIdx = col("wifi_network", "wifi", "ssid", "wifi_ssid")
         let wifiPassIdx = col("wifi_password", "wifi_pass", "wifi_pwd")
@@ -405,7 +419,8 @@ enum PropertiesCSVImport {
                 property = existing
                 isNew = false
             } else {
-                property = Property(name: rawName)
+                let nextOrder = (byKey.values.map(\.sortOrder).max() ?? -1) + 1
+                property = Property(name: rawName, sortOrder: nextOrder)
                 modelContext.insert(property)
                 byKey[key] = property
                 isNew = true
@@ -445,6 +460,7 @@ enum PropertiesCSVImport {
             if !areaRaw.isEmpty {
                 property.livingAreaSqFt = parseInt(areaRaw) ?? property.livingAreaSqFt
             }
+            applyIfPresent(cell(cells, registerURLIdx)) { property.propertyRegisterURL = $0 }
             let yearRaw = cell(cells, yearIdx)
             if !yearRaw.isEmpty {
                 property.yearBuilt = parseYear(yearRaw) ?? property.yearBuilt

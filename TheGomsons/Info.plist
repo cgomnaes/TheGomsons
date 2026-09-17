@@ -12,11 +12,25 @@
 	<string>Take a picture of an item so the app can suggest a name, category, and any visible prices using on-device analysis.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a photo of an item to analyze on your device and suggest Belongings details, or pick a family photo for the tree.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Add names from your contacts to celebration guest lists and trip travelers.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.gomnaes.TheGomsons</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>The Gomsons</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

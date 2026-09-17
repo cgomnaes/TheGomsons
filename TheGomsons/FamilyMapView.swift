@@ -60,7 +60,7 @@ struct FamilyMapView: View {
     var body: some View {
         NavigationStack {
             FamilyMapContentView()
-                .navigationTitle("Map")
+                .navigationTitle(String(localized: "family_tree.view_map"))
                 .navigationBarTitleDisplayMode(.inline)
         }
     }

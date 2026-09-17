@@ -25,8 +25,19 @@ struct FamilyTreeView: View {
     @State private var generationDepth: Int = FamilyTreeHomePersonStore.generationDepth
     @State private var showPickMe = false
     @State private var showAddPerson = false
+    @State private var showTreeSettings = false
     @State private var showFamilyCSVImport = false
     @State private var familyImportAlert: String?
+    @State private var pendingNewParent: PendingNewParent?
+    @State private var showCousins = FamilyTreeHomePersonStore.showCousins
+    @State private var showAddParentCards = FamilyTreeHomePersonStore.showAddParentCards
+    @State private var colorCodeBranches = FamilyTreeHomePersonStore.colorCodeBranches
+    @State private var showDeceasedRibbon = FamilyTreeHomePersonStore.showDeceasedRibbon
+
+    private struct PendingNewParent {
+        let child: FamilyPerson
+        let asMother: Bool
+    }
 
     enum BranchFilter: Int, CaseIterable {
         case all
@@ -89,7 +100,7 @@ struct FamilyTreeView: View {
                 return lhs.sortOrder < rhs.sortOrder
             }
         }
-        return u.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return u.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
     private var resolvedFocus: FamilyPerson? {
@@ -118,7 +129,8 @@ struct FamilyTreeView: View {
             focus: focus,
             universe: treeUniverse,
             ancestorGenerations: generationDepth,
-            descendantGenerations: generationDepth
+            descendantGenerations: generationDepth,
+            includeCousins: showCousins
         )
     }
 
@@ -151,7 +163,7 @@ struct FamilyTreeView: View {
                     )
                 } else {
                     VStack(spacing: 0) {
-                        if !upcomingBirthdays.isEmpty {
+                        if mode != .tree, !upcomingBirthdays.isEmpty {
                             UpcomingBirthdaysStrip(items: upcomingBirthdays) { person in
                                 selectedPerson = person
                             }
@@ -166,17 +178,15 @@ struct FamilyTreeView: View {
                         .padding(.horizontal)
                         .padding(.top, 8)
 
-                        Picker(String(localized: "common.branch"), selection: $branchFilter) {
-                            ForEach(BranchFilter.allCases, id: \.self) { f in
-                                Text(f.title).tag(f)
+                        if mode != .tree {
+                            Picker(String(localized: "common.branch"), selection: $branchFilter) {
+                                ForEach(BranchFilter.allCases, id: \.self) { f in
+                                    Text(f.title).tag(f)
+                                }
                             }
-                        }
-                        .pickerStyle(.menu)
-                        .padding(.horizontal)
-                        .padding(.vertical, 6)
-
-                        if mode == .tree {
-                            treeFocusControls
+                            .pickerStyle(.menu)
+                            .padding(.horizontal)
+                            .padding(.vertical, 6)
                         }
 
                         switch mode {
@@ -215,7 +225,39 @@ struct FamilyTreeView: View {
                     homeButton { openFamilyLanding() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 10) {
+                        if mode == .tree {
+                            Menu {
+                                ForEach(1...5, id: \.self) { depth in
+                                    Button {
+                                        generationDepth = depth
+                                        FamilyTreeHomePersonStore.generationDepth = depth
+                                    } label: {
+                                        HStack {
+                                            Text(depth == 5 ? "5+" : "\(depth)")
+                                            if generationDepth == depth {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                Text(generationDepth >= 5 ? "5+" : "\(generationDepth)")
+                                    .font(.subheadline.weight(.bold))
+                                    .monospacedDigit()
+                                    .frame(minWidth: 22)
+                            }
+                            .accessibilityLabel(String(localized: "family_tree.generations_a11y"))
+
+                            Button {
+                                showTreeSettings = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                            .accessibilityLabel(String(localized: "family_tree.settings_a11y"))
+                        }
+
                         Menu {
                             Button {
                                 showFamilyCSVImport = true
@@ -236,6 +278,7 @@ struct FamilyTreeView: View {
                         .accessibilityLabel(String(localized: "family_tree.import_menu_a11y"))
 
                         Button {
+                            pendingNewParent = nil
                             showAddPerson = true
                         } label: {
                             Image(systemName: "plus.circle.fill")
@@ -244,6 +287,12 @@ struct FamilyTreeView: View {
                         .accessibilityLabel(String(localized: "family_tree.add_person"))
                     }
                 }
+            }
+            .sheet(isPresented: $showTreeSettings) {
+                treeSettingsSheet
+            }
+            .sheet(isPresented: $showPickMe) {
+                pickMeSheet
             }
             .fileImporter(
                 isPresented: $showFamilyCSVImport,
@@ -274,8 +323,26 @@ struct FamilyTreeView: View {
                     FamilyPersonEditorView(
                         person: nil,
                         allPeople: allPeople,
-                        onSave: { _ in showAddPerson = false },
-                        onCancel: { showAddPerson = false }
+                        onSave: { created in
+                            if let pending = pendingNewParent {
+                                if pending.asMother {
+                                    pending.child.mother = created
+                                } else {
+                                    pending.child.father = created
+                                }
+                                do {
+                                    try modelContext.save()
+                                } catch {
+                                    print("[TheGomsons] Failed to link new parent: \(error.localizedDescription)")
+                                }
+                                pendingNewParent = nil
+                            }
+                            showAddPerson = false
+                        },
+                        onCancel: {
+                            pendingNewParent = nil
+                            showAddPerson = false
+                        }
                     )
                 }
             }
@@ -308,111 +375,129 @@ struct FamilyTreeView: View {
         }
     }
 
-    private var treeFocusControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Button {
-                    showPickMe = true
-                } label: {
-                    Label(
-                        mePerson.map { "Me: \($0.displayName.isEmpty ? $0.name : $0.displayName)" } ?? "Who am I?",
-                        systemImage: "person.fill.checkmark"
-                    )
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
+    private var treeSettingsSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Button {
+                        showTreeSettings = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            showPickMe = true
+                        }
+                    } label: {
+                        Label(
+                            mePerson.map {
+                                String(
+                                    format: String(localized: "family_tree.me_is_fmt"),
+                                    locale: .current,
+                                    $0.displayName.isEmpty ? $0.name : $0.displayName
+                                )
+                            } ?? String(localized: "family_tree.who_am_i"),
+                            systemImage: "person.fill.checkmark"
+                        )
+                    }
+                    Button {
+                        goToMePerson()
+                        showTreeSettings = false
+                    } label: {
+                        Label(String(localized: "family_tree.center_on_me"), systemImage: "scope")
+                    }
+                    .disabled(mePerson == nil)
+                } footer: {
+                    Text(String(localized: "family_tree.me_footer"))
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(mePerson == nil ? SimpsonsTheme.orange : SimpsonsTheme.blue)
-                .controlSize(.small)
 
-                Button {
-                    goToMePerson()
-                } label: {
-                    Label("Center on me", systemImage: "scope")
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(mePerson == nil)
-
-                Spacer(minLength: 4)
-
-                Text("Gens")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Picker("Generations", selection: $generationDepth) {
-                    Text("1").tag(1)
-                    Text("2").tag(2)
-                    Text("3").tag(3)
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 120)
-                .onChange(of: generationDepth) { _, newValue in
-                    FamilyTreeHomePersonStore.generationDepth = newValue
+                Section {
+                    Picker(String(localized: "common.branch"), selection: $branchFilter) {
+                        ForEach(BranchFilter.allCases, id: \.self) { f in
+                            Text(f.title).tag(f)
+                        }
+                    }
+                    Toggle(String(localized: "family_tree.setting_cousins"), isOn: $showCousins)
+                        .onChange(of: showCousins) { _, v in
+                            FamilyTreeHomePersonStore.showCousins = v
+                        }
+                    Toggle(String(localized: "family_tree.setting_add_parents"), isOn: $showAddParentCards)
+                        .onChange(of: showAddParentCards) { _, v in
+                            FamilyTreeHomePersonStore.showAddParentCards = v
+                        }
+                    Toggle(String(localized: "family_tree.setting_color_code"), isOn: $colorCodeBranches)
+                        .onChange(of: colorCodeBranches) { _, v in
+                            FamilyTreeHomePersonStore.colorCodeBranches = v
+                        }
+                    Toggle(String(localized: "family_tree.setting_deceased_ribbon"), isOn: $showDeceasedRibbon)
+                        .onChange(of: showDeceasedRibbon) { _, v in
+                            FamilyTreeHomePersonStore.showDeceasedRibbon = v
+                        }
+                } header: {
+                    Text(String(localized: "family_tree.settings_section"))
+                } footer: {
+                    Text(String(localized: "family_tree.settings_footer"))
                 }
             }
-
-            if mePerson == nil {
-                Text("Choose yourself so others are labeled Uncle, Grandmother, Cousin, …")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            .navigationTitle(String(localized: "family_tree.settings_title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "common.done")) { showTreeSettings = false }
+                }
             }
         }
-        .padding(.horizontal)
-        .padding(.bottom, 6)
-        .sheet(isPresented: $showPickMe) {
-            NavigationStack {
-                List {
-                    Section {
-                        Text("Relationship labels (Uncle, Grandfather, …) are shown relative to the person you pick.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    Section("I am…") {
-                        ForEach(allPeople.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }, id: \.persistentModelID) { person in
-                            Button {
-                                FamilyTreeHomePersonStore.setMe(person)
-                                mePersonName = FamilyTreeHomePersonStore.mePersonName
-                                withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
-                                    focusPerson = person
-                                }
-                                showPickMe = false
-                            } label: {
-                                HStack {
-                                    FamilyPersonAvatar(photoData: person.photoData, name: person.displayName)
-                                        .frame(width: 36, height: 36)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(person.displayName.isEmpty ? String(localized: "common.unnamed") : person.displayName)
-                                            .foregroundStyle(.primary)
-                                        if person.hasPreferredName, !person.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                            Text(person.name)
-                                                .font(.caption2)
-                                                .foregroundStyle(.tertiary)
-                                        }
-                                        Text(person.branch.displayTitle)
+        .presentationDetents([.medium, .large])
+    }
+
+    private var pickMeSheet: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text(String(localized: "family_tree.me_footer"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Section(String(localized: "family_tree.i_am")) {
+                    ForEach(allPeople.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }, id: \.persistentModelID) { person in
+                        Button {
+                            FamilyTreeHomePersonStore.setMe(person)
+                            mePersonName = FamilyTreeHomePersonStore.mePersonName
+                            withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
+                                focusPerson = person
+                            }
+                            showPickMe = false
+                        } label: {
+                            HStack {
+                                FamilyPersonAvatar(photoData: person.photoData, name: person.displayName)
+                                    .frame(width: 36, height: 36)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(person.displayName.isEmpty ? String(localized: "common.unnamed") : person.displayName)
+                                        .foregroundStyle(.primary)
+                                    if person.hasPreferredName, !person.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        Text(person.name)
                                             .font(.caption2)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(.tertiary)
                                     }
-                                    Spacer()
-                                    if isMeName(person.name) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(SimpsonsTheme.blue)
-                                    }
+                                    Text(person.branch.displayTitle)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if isMeName(person.name) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(SimpsonsTheme.blue)
                                 }
                             }
                         }
                     }
                 }
-                .navigationTitle("Who am I?")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Close") { showPickMe = false }
-                    }
+            }
+            .navigationTitle(String(localized: "family_tree.who_am_i"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.done")) { showPickMe = false }
                 }
             }
-            .presentationDetents([.medium, .large])
         }
+        .presentationDetents([.medium, .large])
     }
 
     private func isMeName(_ name: String) -> Bool {
@@ -428,6 +513,9 @@ struct FamilyTreeView: View {
                     graph: egoGraph,
                     universe: treeUniverse,
                     mePerson: mePerson,
+                    showAddParentCards: showAddParentCards,
+                    colorCodeBranches: colorCodeBranches,
+                    showDeceasedRibbon: showDeceasedRibbon,
                     onFocus: { person in
                         withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
                             focusPerson = person
@@ -442,6 +530,10 @@ struct FamilyTreeView: View {
                         withAnimation(.spring(duration: 0.35, bounce: 0.12)) {
                             focusPerson = person
                         }
+                    },
+                    onAddParent: { child, asMother in
+                        pendingNewParent = PendingNewParent(child: child, asMother: asMother)
+                        showAddPerson = true
                     },
                     mePersonName: mePersonName
                 )
@@ -479,13 +571,13 @@ struct FamilyTreeView: View {
                                     focusPerson = person
                                 }
                             } label: {
-                                Label("Center in tree", systemImage: "scope")
+                                Label(String(localized: "family_tree.center_in_tree"), systemImage: "scope")
                             }
                             Button {
                                 FamilyTreeHomePersonStore.setMe(person)
                                 mePersonName = FamilyTreeHomePersonStore.mePersonName
                             } label: {
-                                Label("This is me", systemImage: "person.fill.checkmark")
+                                Label(String(localized: "family_tree.this_is_me"), systemImage: "person.fill.checkmark")
                             }
                         }
                     }
@@ -818,22 +910,22 @@ private struct FamilyPersonProfileView: View {
                 Button {
                     onCenterInTree(person)
                 } label: {
-                    Label("Center in family tree", systemImage: "scope")
+                    Label(String(localized: "family_tree.center_in_tree"), systemImage: "scope")
                 }
                 Button {
                     onSetMe(person)
                 } label: {
-                    Label("This is me", systemImage: "person.fill.checkmark")
+                    Label(String(localized: "family_tree.this_is_me"), systemImage: "person.fill.checkmark")
                 }
             }
 
             if person.mother != nil || person.father != nil {
-                Section("Parents") {
+                Section(String(localized: "family_tree.parents")) {
                     if let mother = person.mother {
-                        relatedPersonButton(mother, subtitle: "Mother")
+                        relatedPersonButton(mother, subtitle: String(localized: "kinship.mother"))
                     }
                     if let father = person.father {
-                        relatedPersonButton(father, subtitle: "Father")
+                        relatedPersonButton(father, subtitle: String(localized: "kinship.father"))
                     }
                 }
             }
@@ -897,7 +989,7 @@ private struct FamilyPersonProfileView: View {
             }
 
             if !children.isEmpty {
-                Section("Children") {
+                Section(String(localized: "family_tree.children")) {
                     ForEach(children, id: \.persistentModelID) { child in
                         relatedPersonButton(child, subtitle: nil)
                     }
@@ -1003,7 +1095,7 @@ private struct FamilyPersonProfileView: View {
             Button {
                 onCenterInTree(related)
             } label: {
-                Label("Center in tree", systemImage: "scope")
+                Label(String(localized: "family_tree.center_in_tree"), systemImage: "scope")
             }
         }
     }
@@ -1153,10 +1245,11 @@ private struct FamilyPersonEditorView: View {
             }
 
             Section {
-                TextField(String(localized: "common.name"), text: $draftName)
+                TextField(String(localized: "family_tree.full_name"), text: $draftName)
                     .textContentType(.name)
                 TextField(String(localized: "family_tree.preferred_name"), text: $draftPreferredName)
                     .textContentType(.nickname)
+                    .textInputAutocapitalization(.words)
                 Toggle(String(localized: "family_tree.birthday_toggle"), isOn: $hasBirth)
                 if hasBirth {
                     DatePicker(String(localized: "event.kind.birthday"), selection: $draftBirth, displayedComponents: .date)
@@ -1272,7 +1365,7 @@ private struct FamilyPersonEditorView: View {
             }
 
             Section(String(localized: "common.notes")) {
-                TextField(String(localized: "common.notes"), text: $draftNotes, axis: .vertical)
+                TextField(String(localized: "common.notes_placeholder"), text: $draftNotes, axis: .vertical)
                     .lineLimit(3...8)
             }
 

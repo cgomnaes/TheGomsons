@@ -24,24 +24,22 @@ struct FamilyTreeNode: Identifiable {
     }
 }
 
-/// Person-centered snapshot: ancestors above, focus (+ partner) in the middle, siblings beside, descendants below.
+/// Person-centered snapshot: ancestors above, focus (+ partner + siblings) in the middle, descendants below.
 struct FamilyEgoGraph: Identifiable {
     var id: PersistentIdentifier { focus.persistentModelID }
     var focus: FamilyPerson
     var partner: FamilyPerson?
-    var mother: FamilyPerson?
-    var father: FamilyPerson?
-    var maternalGrandmother: FamilyPerson?
-    var maternalGrandfather: FamilyPerson?
-    var paternalGrandmother: FamilyPerson?
-    var paternalGrandfather: FamilyPerson?
+    /// Pedigree rows from parents (index 0) up to older generations. Each row is mother/father pairs in pedigree order.
+    var ancestorGenerations: [[FamilyPerson?]]
     var siblings: [FamilyPerson]
+    var cousins: [FamilyPerson]
     var childNodes: [FamilyTreeNode]
+    var missingMother: Bool
+    var missingFather: Bool
 
     var hasAncestors: Bool {
-        mother != nil || father != nil
-            || maternalGrandmother != nil || maternalGrandfather != nil
-            || paternalGrandmother != nil || paternalGrandfather != nil
+        ancestorGenerations.contains { row in row.contains(where: { $0 != nil }) }
+            || missingMother || missingFather
     }
 
     var hasDescendants: Bool { !childNodes.isEmpty }
@@ -139,40 +137,59 @@ enum FamilyTreeHierarchyBuilder {
         focus: FamilyPerson,
         universe: [FamilyPerson],
         ancestorGenerations: Int = 2,
-        descendantGenerations: Int = 2
+        descendantGenerations: Int = 2,
+        includeCousins: Bool = false
     ) -> FamilyEgoGraph {
         let ids = Set(universe.map(\.persistentModelID))
-        let ancDepth = max(1, min(ancestorGenerations, 3))
-        let descDepth = max(1, min(descendantGenerations, 3))
+        let ancDepth = max(1, min(ancestorGenerations, 5))
+        let descDepth = max(1, min(descendantGenerations, 5))
 
         func inUniverse(_ p: FamilyPerson?) -> FamilyPerson? {
             guard let p, ids.contains(p.persistentModelID) else { return nil }
             return p
         }
 
-        let mother = inUniverse(focus.mother)
-        let father = inUniverse(focus.father)
         let partner = inUniverse(focus.resolvedPartner)
-
-        var matGM: FamilyPerson?
-        var matGF: FamilyPerson?
-        var patGM: FamilyPerson?
-        var patGF: FamilyPerson?
-        if ancDepth >= 2 {
-            matGM = inUniverse(mother?.mother)
-            matGF = inUniverse(mother?.father)
-            patGM = inUniverse(father?.mother)
-            patGF = inUniverse(father?.father)
-        }
-
         let focusID = focus.persistentModelID
         let partnerID = partner?.persistentModelID
+
+        var pedigreeRows: [[FamilyPerson?]] = []
+        for generation in 1...ancDepth {
+            pedigreeRows.append(pedigreeGeneration(focus: focus, generation: generation, inUniverse: ids))
+        }
+
         let siblings = focus.resolvedSiblings(among: universe)
             .filter { $0.persistentModelID != focusID && $0.persistentModelID != partnerID }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted { lhs, rhs in
+                switch (lhs.birthDate, rhs.birthDate) {
+                case let (a?, b?): return a < b
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default:
+                    if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+            }
+
+        var cousins: [FamilyPerson] = []
+        if includeCousins {
+            var seen = Set<PersistentIdentifier>([focusID])
+            if let partnerID { seen.insert(partnerID) }
+            for s in siblings { seen.insert(s.persistentModelID) }
+            for parent in [focus.mother, focus.father].compactMap({ $0 }) {
+                for auntUncle in parent.resolvedSiblings(among: universe) {
+                    for kid in mergedChildren(for: auntUncle, in: universe) where seen.insert(kid.persistentModelID).inserted {
+                        cousins.append(kid)
+                    }
+                }
+            }
+            cousins.sort { $0.sortOrder < $1.sortOrder }
+        }
 
         var primarySeen = Set<PersistentIdentifier>([focusID])
         if let partnerID { primarySeen.insert(partnerID) }
+        for s in siblings { primarySeen.insert(s.persistentModelID) }
+        for c in cousins { primarySeen.insert(c.persistentModelID) }
 
         let kids = mergedChildren(for: focus, in: universe)
             .filter { $0.persistentModelID != focusID && $0.persistentModelID != partnerID }
@@ -188,15 +205,36 @@ enum FamilyTreeHierarchyBuilder {
         return FamilyEgoGraph(
             focus: focus,
             partner: partner,
-            mother: mother,
-            father: father,
-            maternalGrandmother: matGM,
-            maternalGrandfather: matGF,
-            paternalGrandmother: patGM,
-            paternalGrandfather: patGF,
+            ancestorGenerations: pedigreeRows,
             siblings: siblings,
-            childNodes: childNodes
+            cousins: cousins,
+            childNodes: childNodes,
+            missingMother: focus.mother == nil,
+            missingFather: focus.father == nil
         )
+    }
+
+    /// Pedigree order: generation 1 = [mother, father], generation 2 = four grandparents, …
+    private static func pedigreeGeneration(
+        focus: FamilyPerson,
+        generation: Int,
+        inUniverse ids: Set<PersistentIdentifier>
+    ) -> [FamilyPerson?] {
+        func slot(_ person: FamilyPerson?) -> FamilyPerson? {
+            guard let person, ids.contains(person.persistentModelID) else { return nil }
+            return person
+        }
+        if generation <= 1 {
+            return [slot(focus.mother), slot(focus.father)]
+        }
+        let parents = pedigreeGeneration(focus: focus, generation: generation - 1, inUniverse: ids)
+        var row: [FamilyPerson?] = []
+        row.reserveCapacity(parents.count * 2)
+        for parent in parents {
+            row.append(slot(parent?.mother))
+            row.append(slot(parent?.father))
+        }
+        return row
     }
 
     private static func buildSubtree(
@@ -257,6 +295,7 @@ enum FamilyTreeHierarchyBuilder {
         func textMatches(_ p: FamilyPerson) -> Bool {
             let blob = [
                 p.name,
+                p.preferredName,
                 p.notes,
                 p.email,
                 p.mobile,
@@ -310,6 +349,10 @@ enum FamilyTreeHierarchyBuilder {
 enum FamilyTreeHomePersonStore {
     private static let nameKey = "familyTree.homePersonName"
     private static let generationsKey = "familyTree.generationDepth"
+    private static let showCousinsKey = "familyTree.showCousins"
+    private static let showAddParentCardsKey = "familyTree.showAddParentCards"
+    private static let colorCodeBranchesKey = "familyTree.colorCodeBranches"
+    private static let showDeceasedRibbonKey = "familyTree.showDeceasedRibbon"
 
     /// Display name of the person who represents “me” on this device.
     static var mePersonName: String? {
@@ -333,14 +376,47 @@ enum FamilyTreeHomePersonStore {
         set { mePersonName = newValue }
     }
 
+    /// Generations above/below the centered person (1…5).
     static var generationDepth: Int {
         get {
             let v = UserDefaults.standard.integer(forKey: generationsKey)
-            return v == 0 ? 2 : min(max(v, 1), 3)
+            return v == 0 ? 2 : min(max(v, 1), 5)
         }
         set {
-            UserDefaults.standard.set(min(max(newValue, 1), 3), forKey: generationsKey)
+            UserDefaults.standard.set(min(max(newValue, 1), 5), forKey: generationsKey)
         }
+    }
+
+    static var showCousins: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: showCousinsKey) == nil { return false }
+            return UserDefaults.standard.bool(forKey: showCousinsKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: showCousinsKey) }
+    }
+
+    static var showAddParentCards: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: showAddParentCardsKey) == nil { return true }
+            return UserDefaults.standard.bool(forKey: showAddParentCardsKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: showAddParentCardsKey) }
+    }
+
+    static var colorCodeBranches: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: colorCodeBranchesKey) == nil { return true }
+            return UserDefaults.standard.bool(forKey: colorCodeBranchesKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: colorCodeBranchesKey) }
+    }
+
+    static var showDeceasedRibbon: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: showDeceasedRibbonKey) == nil { return true }
+            return UserDefaults.standard.bool(forKey: showDeceasedRibbonKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: showDeceasedRibbonKey) }
     }
 
     static func setMe(_ person: FamilyPerson) {
@@ -353,178 +429,169 @@ enum FamilyTreeHomePersonStore {
     }
 }
 
-// MARK: - Ego-centric visual tree
+
+// MARK: - Ego-centric visual tree (MyHeritage-style family view)
 
 struct FamilyEgoTreeView: View {
     let graph: FamilyEgoGraph
-    /// Full universe used for kinship labels (branch + search filtered).
     let universe: [FamilyPerson]
-    /// Selected “me” — labels are relative to this person.
     var mePerson: FamilyPerson?
+    var showAddParentCards: Bool = true
+    var colorCodeBranches: Bool = true
+    var showDeceasedRibbon: Bool = true
     var onFocus: (FamilyPerson) -> Void
     var onShowProfile: (FamilyPerson) -> Void
     var onSetMe: (FamilyPerson) -> Void
+    var onAddParent: ((FamilyPerson, Bool) -> Void)?
     var mePersonName: String?
 
+    @State private var zoom: CGFloat = 1
+    @State private var zoomAtGestureStart: CGFloat = 1
+
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical) {
-                ScrollView(.horizontal, showsIndicators: true) {
-                    VStack(spacing: 0) {
-                        if graph.hasAncestors {
-                            ancestorBlock
-                            TreeConnectorLineDown()
+        GeometryReader { geo in
+            ScrollViewReader { proxy in
+                ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                    treeCanvas
+                        .padding(.vertical, 24)
+                        .padding(.horizontal, 20)
+                        .scaleEffect(zoom, anchor: .top)
+                        .frame(
+                            minWidth: max(0, geo.size.width),
+                            minHeight: max(0, geo.size.height * 0.85),
+                            alignment: .top
+                        )
+                        .id("ego-focus")
+                }
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            zoom = min(max(zoomAtGestureStart * value.magnification, 0.55), 1.9)
                         }
-
-                        focusRow
-                            .id("ego-focus")
-
-                        if !graph.siblings.isEmpty {
-                            siblingsRow
+                        .onEnded { _ in
+                            zoomAtGestureStart = zoom
                         }
-
-                        if graph.hasDescendants {
-                            TreeConnectorLineDown()
-                            descendantsRow
+                )
+                .onAppear {
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo("ego-focus", anchor: .center)
                         }
                     }
-                    .padding(.vertical, 20)
-                    .padding(.horizontal, 16)
-                    .frame(minWidth: UIScreen.main.bounds.width - 24)
                 }
-            }
-            .onAppear {
-                DispatchQueue.main.async {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo("ego-focus", anchor: .center)
-                    }
-                }
-            }
-            .onChange(of: graph.focus.persistentModelID) { _, _ in
-                DispatchQueue.main.async {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo("ego-focus", anchor: .center)
+                .onChange(of: graph.focus.persistentModelID) { _, _ in
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            proxy.scrollTo("ego-focus", anchor: .center)
+                        }
                     }
                 }
             }
         }
     }
 
-    @ViewBuilder
+    private var treeCanvas: some View {
+        VStack(spacing: 0) {
+            if graph.hasAncestors {
+                ancestorBlock
+                TreeConnectorLineDown()
+            }
+            homeGenerationRow
+            if graph.hasDescendants {
+                TreeConnectorLineDown()
+                descendantsRow
+            }
+        }
+    }
+
+    /// Older generations on top; parents immediately above the home row.
     private var ancestorBlock: some View {
-        VStack(spacing: 10) {
-            if hasAnyGrandparents {
-                HStack(alignment: .top, spacing: 28) {
-                    grandparentCouple(
-                        left: graph.maternalGrandmother,
-                        right: graph.maternalGrandfather,
-                        label: "Mother’s parents"
-                    )
-                    grandparentCouple(
-                        left: graph.paternalGrandmother,
-                        right: graph.paternalGrandfather,
-                        label: "Father’s parents"
-                    )
-                }
-                if graph.mother != nil || graph.father != nil {
-                    TreeConnectorLineDown()
-                }
-            }
-
-            if graph.mother != nil || graph.father != nil {
-                HStack(alignment: .center, spacing: 8) {
-                    if let mother = graph.mother {
-                        personCard(mother, role: "Mother", emphasized: false)
-                    }
-                    if graph.mother != nil, graph.father != nil {
-                        ParentPartnershipBadge()
-                    }
-                    if let father = graph.father {
-                        personCard(father, role: "Father", emphasized: false)
+        let gens = graph.ancestorGenerations
+        return VStack(spacing: 10) {
+            ForEach(Array(gens.indices.reversed()), id: \.self) { idx in
+                let row = gens[idx]
+                let isParentRow = idx == 0
+                let hasPeople = row.contains { $0 != nil }
+                let showAdds = isParentRow && showAddParentCards && (graph.missingMother || graph.missingFather)
+                if hasPeople || showAdds {
+                    pedigreeRowView(row, isParentRow: isParentRow)
+                    if idx > 0 {
+                        TreeConnectorLineDown()
                     }
                 }
             }
         }
-    }
-
-    private var hasAnyGrandparents: Bool {
-        graph.maternalGrandmother != nil || graph.maternalGrandfather != nil
-            || graph.paternalGrandmother != nil || graph.paternalGrandfather != nil
     }
 
     @ViewBuilder
-    private func grandparentCouple(left: FamilyPerson?, right: FamilyPerson?, label: String) -> some View {
-        if left != nil || right != nil {
-            VStack(spacing: 6) {
-                Text(label)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                HStack(spacing: 6) {
-                    if let left {
-                        personCard(left, role: nil, emphasized: false, compact: true)
-                    }
-                    if left != nil, right != nil {
-                        ParentPartnershipBadge()
-                    }
-                    if let right {
-                        personCard(right, role: nil, emphasized: false, compact: true)
-                    }
+    private func pedigreeRowView(_ row: [FamilyPerson?], isParentRow: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            ForEach(0..<max(row.count / 2, 1), id: \.self) { coupleIndex in
+                let i = coupleIndex * 2
+                let left = i < row.count ? row[i] : nil
+                let right = i + 1 < row.count ? row[i + 1] : nil
+                let showAddMother = isParentRow && coupleIndex == 0 && showAddParentCards && graph.missingMother && left == nil
+                let showAddFather = isParentRow && coupleIndex == 0 && showAddParentCards && graph.missingFather && right == nil
+
+                if coupleIndex > 0, left != nil || right != nil {
+                    Spacer().frame(width: 6)
+                }
+
+                if showAddMother {
+                    addParentCard(asMother: true)
+                } else if let left {
+                    personCard(left, emphasized: false)
+                }
+
+                let showHeart = (left != nil || showAddMother) && (right != nil || showAddFather)
+                if showHeart {
+                    ParentPartnershipBadge()
+                }
+
+                if showAddFather {
+                    addParentCard(asMother: false)
+                } else if let right {
+                    personCard(right, emphasized: false)
                 }
             }
         }
     }
 
-    private var focusRow: some View {
-        VStack(spacing: 8) {
-            Text("Centered on")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-            HStack(alignment: .center, spacing: 10) {
-                personCard(graph.focus, role: nil, emphasized: true)
+    private var homeGenerationRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if !graph.cousins.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(graph.cousins, id: \.persistentModelID) { cousin in
+                        personCard(cousin, emphasized: false, compact: true)
+                    }
+                }
+            }
+
+            if !graph.siblings.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(graph.siblings, id: \.persistentModelID) { sibling in
+                        personCard(sibling, emphasized: false, compact: true)
+                    }
+                }
+            }
+
+            HStack(alignment: .center, spacing: 8) {
+                personCard(graph.focus, emphasized: true)
                 if let partner = graph.partner {
                     ParentPartnershipBadge()
-                    personCard(partner, role: partnerRoleLabel, emphasized: false)
+                    personCard(partner, emphasized: false)
                 }
             }
-            Button {
-                onShowProfile(graph.focus)
-            } label: {
-                Label("View profile", systemImage: "person.crop.circle")
-                    .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(SimpsonsTheme.orange.opacity(0.12))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(SimpsonsTheme.orange.opacity(0.35), lineWidth: 1.5)
-        )
-    }
-
-    private var partnerRoleLabel: String? {
-        graph.focus.displayPartnerStatus?.displayTitle
-    }
-
-    private var siblingsRow: some View {
-        VStack(spacing: 6) {
-            Text("Siblings")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .padding(.top, 10)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(graph.siblings, id: \.persistentModelID) { sibling in
-                        personCard(sibling, role: "Sibling", emphasized: false, compact: true)
-                    }
-                }
-                .padding(.horizontal, 4)
-            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(SimpsonsTheme.orange.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(SimpsonsTheme.orange.opacity(0.35), lineWidth: 1.5)
+            )
         }
     }
 
@@ -536,6 +603,8 @@ struct FamilyEgoTreeView: View {
                     focusID: graph.focus.persistentModelID,
                     universe: universe,
                     mePerson: mePerson,
+                    colorCodeBranches: colorCodeBranches,
+                    showDeceasedRibbon: showDeceasedRibbon,
                     onFocus: onFocus,
                     onShowProfile: onShowProfile,
                     onSetMe: onSetMe,
@@ -545,31 +614,76 @@ struct FamilyEgoTreeView: View {
         }
     }
 
+    private func addParentCard(asMother: Bool) -> some View {
+        Button {
+            onAddParent?(graph.focus, asMother)
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                        .foregroundStyle(SimpsonsTheme.blue.opacity(0.55))
+                        .frame(width: 72, height: 88)
+                    Image(systemName: "plus")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(SimpsonsTheme.blue)
+                }
+                Text(asMother
+                     ? String(localized: "family_tree.add_mother")
+                     : String(localized: "family_tree.add_father"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(SimpsonsTheme.blue)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 88)
+            }
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground).opacity(0.65))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(asMother
+            ? String(localized: "family_tree.add_mother")
+            : String(localized: "family_tree.add_father"))
+    }
+
     private func personCard(
         _ person: FamilyPerson,
-        role: String?,
         emphasized: Bool,
         compact: Bool = false
     ) -> some View {
         FamilyTreePersonCard(
             person: person,
-            roleLabel: displayRole(for: person, structural: role),
-            showsPartnerCaption: false,
+            roleLabel: displayRole(for: person),
             isFocused: emphasized,
             isMe: isMe(person),
             compact: compact,
-            onTap: { onFocus(person) },
+            colorCodeBranches: colorCodeBranches,
+            showDeceasedRibbon: showDeceasedRibbon,
+            onTap: {
+                if person.persistentModelID == graph.focus.persistentModelID {
+                    onShowProfile(person)
+                } else {
+                    onFocus(person)
+                }
+            },
             onShowProfile: { onShowProfile(person) },
             onSetMe: { onSetMe(person) }
         )
     }
 
-    /// Prefer kinship-to-me labels; fall back to structural Mother/Father when “me” isn’t set.
-    private func displayRole(for person: FamilyPerson, structural: String?) -> String? {
+    private func displayRole(for person: FamilyPerson) -> String? {
         if let mePerson {
-            return FamilyKinship.label(of: person, relativeTo: mePerson, among: universe)
+            let kin = FamilyKinship.label(of: person, relativeTo: mePerson, among: universe)
+            if kin == String(localized: "kinship.relative")
+                || kin == String(localized: "kinship.extended") {
+                let custom = person.familyRelationLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !custom.isEmpty { return custom }
+            }
+            return kin
         }
-        return structural
+        return nil
     }
 
     private func isMe(_ person: FamilyPerson) -> Bool {
@@ -584,6 +698,8 @@ private struct FamilyTreeNodeColumn: View {
     var focusID: PersistentIdentifier
     var universe: [FamilyPerson]
     var mePerson: FamilyPerson?
+    var colorCodeBranches: Bool
+    var showDeceasedRibbon: Bool
     var onFocus: (FamilyPerson) -> Void
     var onShowProfile: (FamilyPerson) -> Void
     var onSetMe: (FamilyPerson) -> Void
@@ -592,14 +708,13 @@ private struct FamilyTreeNodeColumn: View {
     var body: some View {
         VStack(spacing: 0) {
             if let co = node.coParent {
-                let sampleChild = node.children.first?.person
                 HStack(alignment: .center, spacing: 6) {
-                    card(node.person, structural: parentalRoleLabel(adult: node.person, sampleChild: sampleChild))
+                    card(node.person)
                     ParentPartnershipBadge()
-                    card(co, structural: parentalRoleLabel(adult: co, sampleChild: sampleChild))
+                    card(co)
                 }
             } else {
-                card(node.person, structural: nil)
+                card(node.person)
             }
 
             if !node.children.isEmpty {
@@ -611,6 +726,8 @@ private struct FamilyTreeNodeColumn: View {
                             focusID: focusID,
                             universe: universe,
                             mePerson: mePerson,
+                            colorCodeBranches: colorCodeBranches,
+                            showDeceasedRibbon: showDeceasedRibbon,
                             onFocus: onFocus,
                             onShowProfile: onShowProfile,
                             onSetMe: onSetMe,
@@ -622,21 +739,28 @@ private struct FamilyTreeNodeColumn: View {
         }
     }
 
-    private func card(_ person: FamilyPerson, structural: String?) -> some View {
+    private func card(_ person: FamilyPerson) -> some View {
         let role: String?
         if let mePerson {
             role = FamilyKinship.label(of: person, relativeTo: mePerson, among: universe)
         } else {
-            role = structural
+            role = nil
         }
         return FamilyTreePersonCard(
             person: person,
             roleLabel: role,
-            showsPartnerCaption: false,
             isFocused: person.persistentModelID == focusID,
             isMe: isMe(person),
             compact: false,
-            onTap: { onFocus(person) },
+            colorCodeBranches: colorCodeBranches,
+            showDeceasedRibbon: showDeceasedRibbon,
+            onTap: {
+                if person.persistentModelID == focusID {
+                    onShowProfile(person)
+                } else {
+                    onFocus(person)
+                }
+            },
             onShowProfile: { onShowProfile(person) },
             onSetMe: { onSetMe(person) }
         )
@@ -649,13 +773,6 @@ private struct FamilyTreeNodeColumn: View {
     }
 }
 
-private func parentalRoleLabel(adult: FamilyPerson, sampleChild: FamilyPerson?) -> String? {
-    guard let c = sampleChild else { return nil }
-    if c.mother?.persistentModelID == adult.persistentModelID { return "Mother" }
-    if c.father?.persistentModelID == adult.persistentModelID { return "Father" }
-    return nil
-}
-
 private struct ParentPartnershipBadge: View {
     var body: some View {
         VStack(spacing: 2) {
@@ -664,9 +781,9 @@ private struct ParentPartnershipBadge: View {
                 .foregroundStyle(SimpsonsTheme.pink)
             Rectangle()
                 .fill(SimpsonsTheme.orange.opacity(0.45))
-                .frame(width: 24, height: 2)
+                .frame(width: 20, height: 2)
         }
-        .accessibilityLabel("Partners")
+        .accessibilityLabel(String(localized: "family_tree.partners_a11y"))
     }
 }
 
@@ -681,96 +798,139 @@ private struct TreeConnectorLineDown: View {
 private struct FamilyTreePersonCard: View {
     let person: FamilyPerson
     var roleLabel: String? = nil
-    var showsPartnerCaption: Bool = true
     var isFocused: Bool = false
     var isMe: Bool = false
     var compact: Bool = false
+    var colorCodeBranches: Bool = true
+    var showDeceasedRibbon: Bool = true
     var onTap: () -> Void
     var onShowProfile: () -> Void
     var onSetMe: () -> Void
 
-    private var avatarSize: CGFloat { compact ? 56 : (isFocused ? 88 : 72) }
+    private var photoWidth: CGFloat { compact ? 64 : (isFocused ? 78 : 72) }
+    private var photoHeight: CGFloat { compact ? 78 : (isFocused ? 96 : 88) }
+    private var cardWidth: CGFloat { compact ? 80 : (isFocused ? 96 : 90) }
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: 6) {
-                ZStack(alignment: .topTrailing) {
-                    FamilyTreeAvatar(photoData: person.photoData, name: person.displayName)
-                        .frame(width: avatarSize, height: avatarSize)
+            VStack(spacing: 0) {
+                ZStack(alignment: .topLeading) {
+                    FamilyTreeAvatar(photoData: person.photoData, name: person.displayName, cornerRadius: 10)
+                        .frame(width: photoWidth, height: photoHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    if person.isDeceased, showDeceasedRibbon {
+                        DeceasedRibbon()
+                            .frame(width: photoWidth * 0.55, height: photoHeight * 0.28)
+                    }
+
                     if isMe {
                         Image(systemName: "person.crop.circle.fill")
                             .symbolRenderingMode(.palette)
                             .foregroundStyle(.white, SimpsonsTheme.blue)
                             .font(.system(size: compact ? 14 : 16))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                             .offset(x: 4, y: -4)
-                            .accessibilityLabel("This is you")
+                            .accessibilityLabel(String(localized: "kinship.you"))
                     }
                 }
-                if let roleLabel {
-                    Text(roleLabel)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(
-                            roleLabel == "You"
-                                ? SimpsonsTheme.blue
-                                : SimpsonsTheme.charcoal.opacity(0.55)
-                        )
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(genderAccent)
+                        .frame(width: 3)
+                        .padding(.vertical, 6)
                 }
-                Text(person.displayName.isEmpty ? "Name" : person.displayName)
-                    .font(isFocused ? .subheadline.weight(.bold) : .caption.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .frame(minWidth: compact ? 72 : 88, maxWidth: isFocused ? 140 : 128)
-                    .foregroundStyle(person.isDeceased ? .secondary : .primary)
-                if person.isDeceased {
-                    DeceasedCrossMark(font: .caption.weight(.semibold))
-                }
-                if showsPartnerCaption, let partner = person.resolvedPartner {
-                    HStack(spacing: 3) {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 8))
-                            .foregroundStyle(SimpsonsTheme.pink)
-                        Text(partnerFirstName(partner))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+
+                VStack(spacing: 2) {
+                    if let roleLabel {
+                        Text(roleLabel)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(isMe ? SimpsonsTheme.blue : .secondary)
                             .lineLimit(1)
                     }
-                    .frame(maxWidth: 128)
+                    Text(displayName)
+                        .font(isFocused ? .caption.weight(.bold) : .caption2.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .foregroundStyle(person.isDeceased ? .secondary : .primary)
+                    if let years = lifeYearsText {
+                        Text(years)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
                 }
-                if person.isDeceased, let death = person.deathDate {
-                    Text("† \(death.formatted(.dateTime.year()))")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                } else if let birth = person.birthDate {
-                    Text(birth, format: .dateTime.month(.abbreviated).day())
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                .padding(.horizontal, 4)
+                .padding(.top, 6)
+                .padding(.bottom, 8)
+                .frame(width: cardWidth)
             }
-            .padding(isFocused ? 12 : 10)
-            .opacity(person.isDeceased ? 0.85 : 1)
+            .frame(width: cardWidth)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(.secondarySystemGroupedBackground))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(cardBackground)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(borderColor, lineWidth: isFocused ? 2.5 : 1.5)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(borderColor, lineWidth: isFocused ? 2 : 1)
             )
-            .shadow(color: isFocused ? SimpsonsTheme.orange.opacity(0.25) : .clear, radius: 8, y: 3)
+            .shadow(color: isFocused ? SimpsonsTheme.orange.opacity(0.22) : .clear, radius: 6, y: 2)
+            .opacity(person.isDeceased ? 0.92 : 1)
         }
         .buttonStyle(.plain)
-        .accessibilityHint("Double-tap to center this person in the tree")
+        .accessibilityHint(String(localized: "family_tree.card_tap_hint"))
         .contextMenu {
             Button(action: onShowProfile) {
-                Label("View profile", systemImage: "person.crop.circle")
+                Label(String(localized: "family_tree.view_profile"), systemImage: "person.crop.circle")
             }
             Button(action: onTap) {
-                Label("Center in tree", systemImage: "scope")
+                Label(String(localized: "family_tree.center_in_tree"), systemImage: "scope")
             }
             Button(action: onSetMe) {
-                Label(isMe ? "This is you" : "This is me", systemImage: "person.fill.checkmark")
+                Label(String(localized: "family_tree.this_is_me"), systemImage: "person.fill.checkmark")
             }
             .disabled(isMe)
+        }
+    }
+
+    private var displayName: String {
+        let n = person.displayFirstName
+        return n.isEmpty ? String(localized: "common.unnamed") : n
+    }
+
+    private var lifeYearsText: String? {
+        let birthY: String? = person.birthDate.map { $0.formatted(.dateTime.year()) }
+        if person.isDeceased {
+            let deathY = person.deathDate.map { $0.formatted(.dateTime.year()) }
+            if let birthY, let deathY { return "\(birthY)–\(deathY)" }
+            if let birthY { return "\(birthY)–†" }
+            if let deathY { return "† \(deathY)" }
+            return "†"
+        }
+        return birthY
+    }
+
+    private var genderAccent: Color {
+        switch FamilyKinship.inferredSex(of: person) {
+        case .female: return SimpsonsTheme.pink.opacity(0.85)
+        case .male: return SimpsonsTheme.blue.opacity(0.85)
+        case .unknown: return Color.secondary.opacity(0.35)
+        }
+    }
+
+    private var cardBackground: Color {
+        if colorCodeBranches {
+            return branchTint.opacity(0.18)
+        }
+        return Color(.secondarySystemGroupedBackground)
+    }
+
+    private var branchTint: Color {
+        switch person.branch {
+        case .ourHousehold: return SimpsonsTheme.orange
+        case .myParentsLine: return SimpsonsTheme.blue
+        case .spouseParentsLine: return SimpsonsTheme.pink
+        case .extended: return SimpsonsTheme.purple
         }
     }
 
@@ -778,12 +938,23 @@ private struct FamilyTreePersonCard: View {
         if isMe { return SimpsonsTheme.blue.opacity(0.85) }
         if isFocused { return SimpsonsTheme.orange }
         if person.isDeceased { return Color.secondary.opacity(0.35) }
-        return SimpsonsTheme.orange.opacity(0.4)
+        return genderAccent.opacity(0.55)
     }
+}
 
-    private func partnerFirstName(_ partner: FamilyPerson) -> String {
-        let name = partner.displayFirstName
-        return name.isEmpty ? String(localized: "common.unnamed") : name
+private struct DeceasedRibbon: View {
+    var body: some View {
+        GeometryReader { geo in
+            Path { path in
+                path.move(to: .zero)
+                path.addLine(to: CGPoint(x: geo.size.width, y: 0))
+                path.addLine(to: CGPoint(x: 0, y: geo.size.height))
+                path.closeSubpath()
+            }
+            .fill(Color.black.opacity(0.78))
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -801,6 +972,7 @@ struct DeceasedCrossMark: View {
 private struct FamilyTreeAvatar: View {
     var photoData: Data?
     var name: String
+    var cornerRadius: CGFloat = 10
 
     var body: some View {
         Group {
@@ -810,15 +982,13 @@ private struct FamilyTreeAvatar: View {
                     .scaledToFill()
             } else {
                 ZStack {
-                    Circle().fill(SimpsonsTheme.orange.opacity(0.28))
+                    Rectangle().fill(SimpsonsTheme.orange.opacity(0.28))
                     Text(initials(from: name))
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(SimpsonsTheme.charcoal)
                 }
             }
         }
-        .clipShape(Circle())
-        .overlay(Circle().stroke(SimpsonsTheme.charcoal.opacity(0.12), lineWidth: 1))
     }
 
     private func initials(from name: String) -> String {

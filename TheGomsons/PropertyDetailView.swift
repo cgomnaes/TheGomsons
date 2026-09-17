@@ -10,6 +10,7 @@ import SwiftUI
 struct PropertyDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var property: Property
+    @Query(sort: \HolidayTrip.startDate) private var allHolidayTrips: [HolidayTrip]
 
     @State private var showAddContact = false
     @State private var showAddEmergencyLine = false
@@ -39,6 +40,10 @@ struct PropertyDetailView: View {
             if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
             return $0.label < $1.label
         }
+    }
+
+    private var upcomingHolidayTrips: [HolidayTrip] {
+        allHolidayTrips.filter { !$0.isPastTrip }
     }
 
     private var contractorsByTrade: [(trade: ContractorTrade, items: [PropertyContractor])] {
@@ -146,6 +151,21 @@ struct PropertyDetailView: View {
                     .listRowBackground(Color.clear)
             }
 
+            if property.isVacationHome {
+                Section {
+                    PropertyCabinVisitsSection(
+                        property: property,
+                        upcomingTrips: upcomingHolidayTrips,
+                        showsHeader: false
+                    )
+                    .padding(.vertical, 4)
+                } header: {
+                    Text(String(localized: "property.cabin.next_visits"))
+                } footer: {
+                    Text(String(localized: "property.cabin.next_visits.footer"))
+                }
+            }
+
             Section {
                 TextField(String(localized: "property.field.name"), text: $property.name)
                     .font(.title2.weight(.bold))
@@ -175,6 +195,29 @@ struct PropertyDetailView: View {
                     }
                 }
                 HStack {
+                    Text(String(localized: "property.living_area"))
+                    Spacer()
+                    IntZeroAsEmptyField(placeholder: String(localized: "property.number_dash"), value: $property.livingAreaSqFt)
+                        .frame(maxWidth: 100)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField(
+                        String(localized: "property.register_url_placeholder"),
+                        text: $property.propertyRegisterURL,
+                        axis: .vertical
+                    )
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                    .lineLimit(2 ... 4)
+                    if let registerURL = Self.sanitizedURL(from: property.propertyRegisterURL) {
+                        Link(destination: registerURL) {
+                            Label(String(localized: "property.open_register"), systemImage: "safari")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                    }
+                }
+                HStack {
                     Text(String(localized: "property.field.bedrooms"))
                     Spacer()
                     IntZeroAsEmptyField(placeholder: String(localized: "property.number_dash"), value: $property.bedrooms)
@@ -198,6 +241,8 @@ struct PropertyDetailView: View {
                 }
             } header: {
                 Text(String(localized: "property.key_info"))
+            } footer: {
+                Text(String(localized: "property.register_url_footer"))
             }
 
             if property.isRented {
@@ -464,12 +509,6 @@ struct PropertyDetailView: View {
             }
 
             Section {
-                HStack {
-                    Text(String(localized: "property.living_area"))
-                    Spacer()
-                    IntZeroAsEmptyField(placeholder: String(localized: "property.number_dash"), value: $property.livingAreaSqFt)
-                        .frame(maxWidth: 100)
-                }
                 LabeledContent(String(localized: "property.insurance_policy")) {
                     TextField(String(localized: "common.optional"), text: $property.insurancePolicyNumber)
                         .multilineTextAlignment(.trailing)
@@ -696,6 +735,15 @@ struct PropertyDetailView: View {
         } catch {
             print("[TheGomsons] Failed to save property edits: \(error.localizedDescription)")
         }
+    }
+
+    /// Accepts full URLs or host/path strings for the property register link.
+    private static func sanitizedURL(from raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let url = URL(string: trimmed), url.scheme != nil { return url }
+        if let url = URL(string: "https://\(trimmed)"), url.host != nil { return url }
+        return nil
     }
 
     @ViewBuilder

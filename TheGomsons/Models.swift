@@ -317,6 +317,8 @@ final class Property {
     /// Stored attribute name must stay `livingAreaSqFt` for CloudKit (property renames are not allowed). UI treats values as m².
     var livingAreaSqFt: Int = 0
     var yearBuilt: Int = 0
+    /// Kartverket / eiendomsregisteret (or other registry) URL for the property.
+    var propertyRegisterURL: String = ""
     var insuranceCarrier: String = ""
     var insurancePolicyNumber: String = ""
     var utilitiesNotes: String = ""
@@ -351,6 +353,9 @@ final class Property {
     /// `Date.distantPast` when not archived — non-optional keeps CloudKit export stable (nil optional dates can confuse mirroring).
     var archivedAt: Date = Date.distantPast
 
+    /// Manual list order (Properties tab drag-reorder). CloudKit keeps this across devices.
+    var sortOrder: Int = 0
+
     @Relationship(deleteRule: .cascade, inverse: \InventoryItem.property)
     var inventoryItems: [InventoryItem]? = []
 
@@ -372,12 +377,20 @@ final class Property {
     @Relationship(deleteRule: .cascade, inverse: \PropertyMaintenanceEntry.property)
     var maintenanceEntries: [PropertyMaintenanceEntry]? = []
 
+    @Relationship(deleteRule: .nullify, inverse: \HolidayTrip.linkedProperty)
+    var linkedTrips: [HolidayTrip]? = []
+
     var tenure: PropertyTenure {
         get { PropertyTenure(rawValue: tenureRaw) ?? .owned }
         set { tenureRaw = newValue.rawValue }
     }
 
     var isRented: Bool { tenure == .rented }
+
+    /// Cabin / hytte — excludes house (main residence), apartment, land, and other.
+    var isVacationHome: Bool {
+        propertyKind.normalizedForPicker == .cabin
+    }
 
     init(
         name: String = "",
@@ -392,6 +405,7 @@ final class Property {
         bathrooms: Double = 0,
         livingAreaSqFt: Int = 0,
         yearBuilt: Int = 0,
+        propertyRegisterURL: String = "",
         insuranceCarrier: String = "",
         insurancePolicyNumber: String = "",
         utilitiesNotes: String = "",
@@ -411,6 +425,7 @@ final class Property {
         trashAndRecyclingSchedule: String = "",
         parkingNotes: String = "",
         smartHomeNotes: String = "",
+        sortOrder: Int = 0,
         inventoryItems: [InventoryItem] = [],
         contacts: [PropertyContact] = [],
         emergencyLines: [PropertyEmergencyLine] = []
@@ -427,6 +442,7 @@ final class Property {
         self.bathrooms = bathrooms
         self.livingAreaSqFt = livingAreaSqFt
         self.yearBuilt = yearBuilt
+        self.propertyRegisterURL = propertyRegisterURL
         self.insuranceCarrier = insuranceCarrier
         self.insurancePolicyNumber = insurancePolicyNumber
         self.utilitiesNotes = utilitiesNotes
@@ -446,6 +462,7 @@ final class Property {
         self.trashAndRecyclingSchedule = trashAndRecyclingSchedule
         self.parkingNotes = parkingNotes
         self.smartHomeNotes = smartHomeNotes
+        self.sortOrder = sortOrder
         self.inventoryItems = inventoryItems
         self.contacts = contacts
         self.emergencyLines = emergencyLines
@@ -582,13 +599,13 @@ extension Property {
     var formattedBedBathArea: String? {
         var parts: [String] = []
         if bedrooms > 0 {
-            parts.append("\(bedrooms) BR")
+            parts.append(String(format: String(localized: "property.facts.br_fmt"), locale: .current, bedrooms))
         }
         if bathrooms > 0 {
-            parts.append(String(format: "%g BA", bathrooms))
+            parts.append(String(format: String(localized: "property.facts.ba_fmt"), locale: .current, bathrooms))
         }
         if livingAreaSqFt > 0 {
-            parts.append("\(livingAreaSqFt.formatted(.number.grouping(.never))) m²")
+            parts.append(String(format: String(localized: "property.facts.area_fmt"), locale: .current, livingAreaSqFt))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -1637,13 +1654,68 @@ extension FamilyPerson {
 
 // MARK: - Holidays (trip history, planning, family chat)
 
+enum HolidayTripKind: String, Codable, CaseIterable, Identifiable, Sendable {
+    case trip
+    case celebration
+
+    var id: String { rawValue }
+
+    var displayTitle: String {
+        switch self {
+        case .trip: String(localized: "trip.kind.trip")
+        case .celebration: String(localized: "trip.kind.celebration")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .trip: "suitcase.fill"
+        case .celebration: "party.popper.fill"
+        }
+    }
+}
+
+/// Celebration RSVP: coming, not coming, or maybe.
+enum HolidayRSVPStatus: String, Codable, CaseIterable, Identifiable, Sendable {
+    case attending
+    case notAttending
+    case maybe
+
+    var id: String { rawValue }
+
+    var displayTitle: String {
+        switch self {
+        case .attending: String(localized: "trip.guest_coming")
+        case .notAttending: String(localized: "trip.guest_not_coming")
+        case .maybe: String(localized: "trip.guest_maybe")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .attending: "checkmark.circle.fill"
+        case .notAttending: "xmark.circle.fill"
+        case .maybe: "questionmark.circle.fill"
+        }
+    }
+}
+
 @Model
 final class HolidayTrip {
     var tripName: String = ""
     var startDate: Date = Date(timeIntervalSince1970: 0)
     var endDate: Date = Date(timeIntervalSince1970: 0)
+    /// `HolidayTripKind.rawValue` — vacation/travel vs celebration (party planner).
+    var tripKindRaw: String = HolidayTripKind.trip.rawValue
     /// Free-form trip notes (plans, reminders, memories).
     var notes: String = ""
+
+    /// Celebration: who or what is being celebrated (e.g. “CC turning 16”, “Our anniversary”).
+    var celebrationSubject: String = ""
+    /// Celebration: venue (home, restaurant, cabin, etc.).
+    var celebrationVenue: String = ""
+    /// Celebration: menu / food & drink plan.
+    var celebrationMenu: String = ""
 
     /// Primary airline for the trip (optional).
     var airlineName: String = ""
@@ -1678,11 +1750,28 @@ final class HolidayTrip {
     @Relationship(deleteRule: .cascade, inverse: \HolidayPlanItem.trip)
     var planItems: [HolidayPlanItem]? = []
 
+    @Relationship(deleteRule: .nullify)
+    var linkedProperty: Property?
+
+    @Relationship(deleteRule: .cascade, inverse: \HolidayTripGuest.trip)
+    var guests: [HolidayTripGuest]? = []
+
+    var tripKind: HolidayTripKind {
+        get { HolidayTripKind(rawValue: tripKindRaw) ?? .trip }
+        set { tripKindRaw = newValue.rawValue }
+    }
+
+    var isCelebration: Bool { tripKind == .celebration }
+
     init(
         tripName: String = "",
         startDate: Date = Date(timeIntervalSince1970: 0),
         endDate: Date = Date(timeIntervalSince1970: 0),
+        tripKind: HolidayTripKind = .trip,
         notes: String = "",
+        celebrationSubject: String = "",
+        celebrationVenue: String = "",
+        celebrationMenu: String = "",
         airlineName: String = "",
         bookingReference: String = "",
         mainAccommodation: String = "",
@@ -1696,12 +1785,18 @@ final class HolidayTrip {
         reviewPhoto3Data: Data? = nil,
         destinations: [HolidayDestination] = [],
         participants: [HolidayTripParticipant] = [],
-        planItems: [HolidayPlanItem] = []
+        planItems: [HolidayPlanItem] = [],
+        linkedProperty: Property? = nil,
+        guests: [HolidayTripGuest] = []
     ) {
         self.tripName = tripName
         self.startDate = startDate
         self.endDate = endDate
+        self.tripKindRaw = tripKind.rawValue
         self.notes = notes
+        self.celebrationSubject = celebrationSubject
+        self.celebrationVenue = celebrationVenue
+        self.celebrationMenu = celebrationMenu
         self.airlineName = airlineName
         self.bookingReference = bookingReference
         self.mainAccommodation = mainAccommodation
@@ -1716,6 +1811,8 @@ final class HolidayTrip {
         self.destinations = destinations
         self.participants = participants
         self.planItems = planItems
+        self.linkedProperty = linkedProperty
+        self.guests = guests
     }
 
     /// True when the trip’s last calendar day is before today (fully completed).
@@ -1762,17 +1859,76 @@ final class HolidayTripParticipant {
     /// Short label shown under the name (e.g. Mom, Teen, Guest).
     var roleTag: String = ""
     var sortOrder: Int = 0
+    /// Legacy bool — `true` only when RSVP is “coming”. Kept for existing CloudKit rows.
+    var isAttending: Bool = true
+    /// `HolidayRSVPStatus.rawValue`; empty means derive from `isAttending`.
+    var rsvpStatusRaw: String = ""
 
     var trip: HolidayTrip?
+
+    var rsvpStatus: HolidayRSVPStatus {
+        get {
+            if let parsed = HolidayRSVPStatus(rawValue: rsvpStatusRaw) {
+                return parsed
+            }
+            return isAttending ? .attending : .notAttending
+        }
+        set {
+            rsvpStatusRaw = newValue.rawValue
+            isAttending = newValue == .attending
+        }
+    }
 
     init(
         displayName: String = "",
         roleTag: String = "",
         sortOrder: Int = 0,
+        rsvpStatus: HolidayRSVPStatus = .attending,
         trip: HolidayTrip? = nil
     ) {
         self.displayName = displayName
         self.roleTag = roleTag
+        self.sortOrder = sortOrder
+        self.rsvpStatusRaw = rsvpStatus.rawValue
+        self.isAttending = rsvpStatus == .attending
+        self.trip = trip
+    }
+}
+
+/// External guest on a celebration (or trip) with RSVP-style attendance.
+@Model
+final class HolidayTripGuest {
+    var guestName: String = ""
+    /// Legacy bool — `true` only when RSVP is “coming”.
+    var isAttending: Bool = true
+    /// `HolidayRSVPStatus.rawValue`; empty means derive from `isAttending`.
+    var rsvpStatusRaw: String = ""
+    var sortOrder: Int = 0
+
+    var trip: HolidayTrip?
+
+    var rsvpStatus: HolidayRSVPStatus {
+        get {
+            if let parsed = HolidayRSVPStatus(rawValue: rsvpStatusRaw) {
+                return parsed
+            }
+            return isAttending ? .attending : .notAttending
+        }
+        set {
+            rsvpStatusRaw = newValue.rawValue
+            isAttending = newValue == .attending
+        }
+    }
+
+    init(
+        guestName: String = "",
+        rsvpStatus: HolidayRSVPStatus = .attending,
+        sortOrder: Int = 0,
+        trip: HolidayTrip? = nil
+    ) {
+        self.guestName = guestName
+        self.rsvpStatusRaw = rsvpStatus.rawValue
+        self.isAttending = rsvpStatus == .attending
         self.sortOrder = sortOrder
         self.trip = trip
     }

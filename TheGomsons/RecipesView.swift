@@ -12,7 +12,7 @@ struct RecipesListView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\Recipe.sortOrder), SortDescriptor(\Recipe.title)])
     private var allRecipes: [Recipe]
-    @Query(sort: \Property.name) private var properties: [Property]
+    @Query(sort: [SortDescriptor(\Property.sortOrder), SortDescriptor(\Property.name)]) private var properties: [Property]
 
     /// When set, only show recipes for this property (plus allow adding with it preselected).
     var filterProperty: Property? = nil
@@ -196,7 +196,7 @@ private struct RecipeRowView: View {
 struct RecipeEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Property.name) private var properties: [Property]
+    @Query(sort: [SortDescriptor(\Property.sortOrder), SortDescriptor(\Property.name)]) private var properties: [Property]
 
     var recipeToEdit: Recipe? = nil
     var defaultProperty: Property? = nil

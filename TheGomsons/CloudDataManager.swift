@@ -48,6 +48,8 @@
 //    (or a device). These are **not** app crashes.
 //  • `hapticpatternlibrary.plist` / `_dictationButton` / keyboard constraint conflicts — Simulator/UIKit noise.
 //  • Wikipedia / MapKit TLS or missing `satellite.styl` — network MITM or MapKit asset gaps in Simulator.
+//  • Subscription favicon TLS (`t1.gstatic.com`, error -9802) — corporate HTTPS proxy (e.g. DNB `zscloud.dnb.no`)
+//    intercepting Google favicon CDN; `SubscriptionLogoView` falls back to category icons. Not a sync bug.
 //  • `NSKeyedUnarchiveFromData` / deprecation — comes from **Core Data / system frameworks** (not your Swift);
 //    Apple may silence it in a future OS. Ignore unless you see data corruption alongside it.
 //  • `updateTaskRequest` / `com.apple.coredata.cloudkit.activity.export` / `BGSystemTaskSchedulerErrorDomain` —
@@ -91,7 +93,7 @@
 //  3. **Schema** → **Record Types**: after a DEBUG device run, `CD_*` types appear. Names match entities
 //     (prefix `CD_`). For this app, expect at least:
 //     `CD_Asset`, `CD_FamilyEvent`, `CD_FamilyGroupPhoto`, `CD_FamilyPerson`, `CD_HolidayChatMessage`, `CD_HolidayDestination`,
-//     `CD_HolidayTrip`, `CD_HolidayTripParticipant`, `CD_InventoryItem`, `CD_InventoryItemLink`,
+//     `CD_HolidayTrip`, `CD_HolidayTripGuest`, `CD_HolidayTripParticipant`, `CD_InventoryItem`, `CD_InventoryItemLink`,
 //     `CD_InventoryItemDocument`, `CD_Location`, `CD_Property`,
 //     `CD_PropertyContact`, `CD_PropertyContractor`, `CD_PropertyEmergencyLine`, `CD_PropertyServiceProvider`,
 //     `CD_Recipe`, `CD_PropertyMaintenanceEntry`, `CD_Subscription`, `CD_VacationIdea`
@@ -187,6 +189,7 @@ final class CloudDataManager: ObservableObject {
             HolidayTrip.self,
             HolidayDestination.self,
             HolidayTripParticipant.self,
+            HolidayTripGuest.self,
             HolidayPlanItem.self,
             VacationIdea.self,
             HolidayChatMessage.self,
@@ -210,6 +213,8 @@ final class CloudDataManager: ObservableObject {
 
     /// Latest non-account CloudKit mirroring failure (export/import), surfaced in Family sync settings.
     @Published private(set) var lastCloudKitSyncErrorMessage: String?
+    /// Full nested error chain from the last mirroring failure (for troubleshooting in Settings).
+    @Published private(set) var lastCloudKitSyncErrorDetail: String?
 
     /// Non-nil when the local store failed to open (avoids `fatalError` so the UI can explain).
     @Published private(set) var storeLoadErrorMessage: String?
@@ -288,8 +293,12 @@ final class CloudDataManager: ObservableObject {
 
             if let error = event.error {
                 if Self.isBenignCloudKitAccountError(error) {
-                    // Simulator without iCloud, or temporary auth — expected; not a crash path.
-                    print("[TheGomsons] CloudKit \(typeLabel): iCloud unavailable (\(Self.shortCloudKitError(error))). Local data still works.")
+                    if Self.isTransientCloudKitNetworkOnlyError(error) {
+                        print("[TheGomsons] CloudKit \(typeLabel): transient network (\(Self.shortCloudKitError(error))). Core Data will retry.")
+                    } else {
+                        // Simulator without iCloud, or temporary auth — expected; not a crash path.
+                        print("[TheGomsons] CloudKit \(typeLabel): iCloud unavailable (\(Self.shortCloudKitError(error))). Local data still works.")
+                    }
                 } else {
                     print("[TheGomsons] CloudKit \(typeLabel) failed: \(error)")
                     print("[TheGomsons] CloudKit \(typeLabel) nested: \(Self.debugCloudKitErrorChain(error))")
@@ -305,6 +314,7 @@ final class CloudDataManager: ObservableObject {
             if event.type == .export || event.type == .import {
                 Task { @MainActor in
                     CloudDataManager.shared.lastCloudKitSyncErrorMessage = nil
+                    CloudDataManager.shared.lastCloudKitSyncErrorDetail = nil
                 }
             }
 
@@ -383,9 +393,14 @@ final class CloudDataManager: ObservableObject {
 
     /// Records a mirroring failure for Family sync troubleshooting (schema / permission / corrupt rows).
     func recordCloudKitSyncError(_ error: Error, phase: String) {
+        let detail = Self.debugCloudKitErrorChain(error)
+        lastCloudKitSyncErrorDetail = detail.isEmpty ? nil : detail
         let message = Self.userFacingCloudKitErrorMessage(error, phase: phase)
         lastCloudKitSyncErrorMessage = message
         print("[TheGomsons] CloudKit \(phase) user-facing: \(message)")
+        if !detail.isEmpty {
+            print("[TheGomsons] CloudKit \(phase) detail: \(detail)")
+        }
     }
 
     nonisolated private static func userFacingCloudKitErrorMessage(_ error: Error, phase: String) -> String {
@@ -427,7 +442,8 @@ final class CloudDataManager: ObservableObject {
         }
         if leaves.contains(where: { $0.domain == CKError.errorDomain && $0.code == CKError.Code.partialFailure.rawValue })
             || (error as NSError).domain == CKError.errorDomain && (error as NSError).code == CKError.Code.partialFailure.rawValue {
-            return String(format: String(localized: "sync.error.partial"), locale: .current, phase)
+            let hint = nestedActionableHint(from: error)
+            return String(format: String(localized: "sync.error.partial"), locale: .current, phase, hint)
         }
         if let detail = distinctiveLeafDescription(leaves) {
             return String(format: String(localized: "sync.error.generic"), locale: .current, phase, detail)
@@ -507,6 +523,29 @@ final class CloudDataManager: ObservableObject {
         return parts.joined(separator: " ")
     }
 
+    nonisolated private static func nestedActionableHint(from error: Error) -> String {
+        let leaves = leafCloudKitErrors(from: error)
+        for leaf in leaves {
+            let text = diagnosticText(for: leaf)
+            let lower = text.lowercased()
+            if lower.contains("production schema")
+                || lower.contains("cannot create or modify field")
+                || lower.contains("cannot create field")
+                || lower.contains("cannot create new type")
+                || lower.contains("fetching asset failed")
+                || lower.contains("not marked queryable")
+                || lower.contains("not marked sortable")
+                || lower.contains("permission") {
+                return text
+            }
+        }
+        let dump = String(describing: error).lowercased()
+        if dump.contains("fetching asset") || dump.contains("asset not available") {
+            return String(localized: "sync.hint.asset_fetch_short")
+        }
+        return String(localized: "sync.error.partial_fallback")
+    }
+
     nonisolated private static func distinctiveLeafDescription(_ leaves: [NSError]) -> String? {
         let interesting = leaves.filter { ns in
             if ns.domain == CKError.errorDomain && ns.code == CKError.Code.partialFailure.rawValue {
@@ -523,7 +562,10 @@ final class CloudDataManager: ObservableObject {
 
     nonisolated private static func debugCloudKitErrorChain(_ error: Error) -> String {
         leafCloudKitErrors(from: error)
-            .map { "\($0.domain) \($0.code): \($0.localizedDescription)" }
+            .map { leaf in
+                let detail = diagnosticText(for: leaf)
+                return "\(leaf.domain) \(leaf.code): \(detail)"
+            }
             .joined(separator: " | ")
     }
 
@@ -561,11 +603,17 @@ final class CloudDataManager: ObservableObject {
 
     nonisolated private static func isBenignCloudKitAccountError(_ error: Error) -> Bool {
         let ns = error as NSError
+        // Core Data+CloudKit wraps account status as Cocoa 134400 before CKError is available.
+        if ns.domain == NSCocoaErrorDomain && ns.code == 134400 {
+            return true
+        }
         if ns.domain == CKError.errorDomain {
             let code = CKError.Code(rawValue: ns.code)
             switch code {
             case .notAuthenticated, .accountTemporarilyUnavailable, .networkUnavailable, .networkFailure:
                 return true
+            case .partialFailure:
+                return isTransientCloudKitNetworkOnlyError(error)
             default:
                 break
             }
@@ -575,6 +623,20 @@ final class CloudDataManager: ObservableObject {
             return isBenignCloudKitAccountError(underlying)
         }
         return false
+    }
+
+    /// Partial import where every nested failure is a transient network/asset download error (proxy, Wi‑Fi, Simulator).
+    nonisolated private static func isTransientCloudKitNetworkOnlyError(_ error: Error) -> Bool {
+        let leaves = leafCloudKitErrors(from: error)
+        guard !leaves.isEmpty else { return false }
+        let transientCodes: Set<Int> = [
+            CKError.Code.networkFailure.rawValue,
+            CKError.Code.networkUnavailable.rawValue,
+            CKError.Code.serviceUnavailable.rawValue,
+        ]
+        return leaves.allSatisfy { leaf in
+            leaf.domain == CKError.errorDomain && transientCodes.contains(leaf.code)
+        }
     }
 
     nonisolated private static func shortCloudKitError(_ error: Error) -> String {

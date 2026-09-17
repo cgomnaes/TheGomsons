@@ -1094,6 +1094,7 @@ private struct FamilyEventEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: kind) { _, new in
             if new == .birthday {
+                reminderMinutes = 0
                 dateValue = mergedBirthdayDate(monthDayTime: dateValue, year: yearBorn)
             }
         }

@@ -3,7 +3,7 @@ tab.holidays|Holidays|Ferier
 tab.properties|Properties|Eiendommer
 tab.stash|Belongings|Eiendeler
 tab.calendar|Calendar|Kalender
-tab.subs|Subs|Abbo
+tab.subs|Subscriptions|Abonnementer
 tab.family_tree|Family tree|Familien
 app.title|The Gomsons|The Gomsons
 common.delete|Delete|Slett
@@ -21,12 +21,23 @@ common.name|Name|Navn
 common.field_title|Title|Tittel
 event.field.location|Location|Sted
 event.field.assigned|Assigned to|Tildelt
-calendar.reminder_notify_day|Notify on the day|Varsle samme dag
+calendar.reminder_notify_day|Notify at 8 AM on the day|Varsle kl. 08 på dagen
 calendar.reminder_notify_at_event|Notify at event time|Varsle ved hendelse
 calendar.reminder_notify_before|Notify %lld min before|Varsle %lld min før
-calendar.reminder_footer_birthday|Birthdays use the start of that day (no time). Reminders fire relative to midnight. Allow notifications in Settings if you don’t see alerts.|Bursdager bruker starten av dagen (ingen tid). Varsler ved midnatt. Tillat varsler i Innstillinger hvis du ikke ser dem.
+calendar.reminder_footer_birthday|Birthday reminders fire at 8 AM the day before (“tomorrow”) and on the day (“today”). Optional offset applies before 8 AM on the birthday only. Allow notifications in Settings if you don’t see alerts.|Bursdagsvarsler sendes kl. 08 dagen før («i morgen») og på dagen («i dag»). Valgfri offset gjelder kun samme dag før kl. 08. Tillat varsler i Innstillinger hvis du ikke ser dem.
+calendar.birthday_notify.generic_name|Family member|Familiemedlem
+calendar.birthday_notify.today_title|%@'s birthday!|%@s bursdag!
+calendar.birthday_notify.today_body|Birthday is today|Bursdag i dag
+calendar.birthday_notify.tomorrow_title|Tomorrow: %@'s birthday|I morgen: %@s bursdag
+calendar.birthday_notify.tomorrow_body|Birthday is tomorrow|Bursdag i morgen
+calendar.birthday_notify.event_tomorrow_title|Tomorrow: %@|I morgen: %@
 calendar.reminder_footer_general|Allow notifications in Settings if you don’t see alerts.|Tillat varsler i Innstillinger hvis du ikke ser dem.
 common.notes|Notes|Notater
+common.notes_placeholder|Optional notes…|Valgfrie notater…
+common.phone|Phone|Telefon
+common.email|Email|E-post
+common.show_secret|Show|Vis
+common.hide_secret|Hide|Skjul
 common.details|Details|Detaljer
 common.type|Type|Type
 common.category|Category|Kategori
@@ -73,7 +84,9 @@ sync.error.generic|iCloud %@ failed: %@|iCloud %@ feilet: %@
 sync.error.schema_mismatch|iCloud %@ failed: the Production CloudKit schema is missing fields (for example CD_propertyRegisterURL on properties). Import CloudKit/PublicSchema.ckdb to Development, then Deploy Schema to Production in CloudKit Console.|iCloud %@ feilet: Production-skjemaet mangler felt (for eksempel CD_propertyRegisterURL på eiendommer). Importer CloudKit/PublicSchema.ckdb til Development, og deploy skjemaet til Production i CloudKit Console.
 sync.error.indexes|iCloud %@ failed: CloudKit indexes are missing (Queryable/Sortable on ___modTime or recordName). Add them in CloudKit Console for Production, then try again.|iCloud %@ feilet: CloudKit-indekser mangler (Queryable/Sortable på ___modTime eller recordName). Legg dem til i CloudKit Console for Production, og prøv igjen.
 sync.error.permission|iCloud %@ failed: this iCloud account is not allowed to update a shared record. In CloudKit Console, grant Authenticated (_icloud) Write on CD_* types and deploy to Production.|iCloud %@ feilet: denne iCloud-kontoen har ikke lov til å oppdatere en delt post. Gi Authenticated (_icloud) Write på CD_*-typene i CloudKit Console og deploy til Production.
-sync.error.partial|iCloud %@ failed: some records could not sync (CloudKit error 2). Check Xcode for the nested errors (missing Production fields, write permission, or failed photo/asset download).|iCloud %@ feilet: noen poster kunne ikke synkes (CloudKit-feil 2). Sjekk Xcode for underliggende feil (manglende Production-felt, skrivetillatelse, eller feilet bilde-/asset-nedlasting).
+sync.error.partial|iCloud %@ failed: some records could not sync (CloudKit error 2). %@|iCloud %@ feilet: noen poster kunne ikke synkes (CloudKit-feil 2). %@
+sync.error.partial_fallback|Import CloudKit/PublicSchema.ckdb to Development, then Deploy Schema to Production in CloudKit Console.|Importer CloudKit/PublicSchema.ckdb til Development, og deploy skjemaet til Production i CloudKit Console.
+sync.hint.asset_fetch_short|Photo or file asset download failed — try Wi‑Fi or re-save the photo in the app.|Bilde- eller fil-asset kunne ikke lastes ned — prøv Wi‑Fi eller lagre bildet på nytt i appen.
 sync.error.asset_fetch|iCloud %@ failed: CloudKit could not download photo/file assets (often family photos on CD_FamilyPerson). Try again on Wi‑Fi or a real device; if the same records keep failing, clear those photos in CloudKit Console (Public → CD_FamilyPerson) or re-save the photos in the app.|iCloud %@ feilet: CloudKit klarte ikke å laste ned bilde-/fil-assets (ofte familiebilder på CD_FamilyPerson). Prøv på Wi‑Fi eller en ekte enhet; hvis de samme postene feiler igjen, fjern bildene i CloudKit Console (Public → CD_FamilyPerson) eller lagre bildene på nytt i appen.
 export.section|Export|Eksporter
 export.backup_now|Export full backup now|Eksporter full sikkerhetskopi nå
@@ -83,6 +96,19 @@ export.none|No exports yet—tap Export above.|Ingen eksporter ennå — trykk E
 export.about_restore|About restore|Om gjenoppretting
 export.restore_note|Restoring is for advanced recovery: replace the app’s data folder from a backup while the app is fully quit, using the same app version. Misuse can corrupt the database.|Gjenoppretting er for avansert gjenoppretting: erstatt appens datamappe fra en sikkerhetskopi mens appen er helt avsluttet, med samme appversjon. Feil kan ødelegge databasen.
 export.backup_description|Creates a folder in On My iPhone → The Gomsons → TheGomsonsBackups with a timestamp and a manifest file. Use it if a device is lost or data is corrupted.|Lager en mappe på «På min iPhone» → The Gomsons → TheGomsonsBackups med tidsstempel og manifest. Bruk hvis en enhet mistes eller data blir korrupt.
+export.automatic_section|Automatic backups|Automatiske sikkerhetskopier
+export.monthly_toggle|Monthly iCloud backups|Månedlige iCloud-sikkerhetskopier
+export.monthly_toggle_detail|Automatically saves a full copy to iCloud Drive about every 30 days.|Lagrer automatisk en full kopi til iCloud Drive omtrent hver 30. dag.
+export.monthly_last|Last monthly backup|Siste månedlige sikkerhetskopi
+export.monthly_next|Next due|Neste forfall
+export.monthly_due_now|Due now|Forfaller nå
+export.monthly_in_days_fmt|In %lld days|Om %lld dager
+export.monthly_files_footer_fmt|Backups appear in Files → iCloud Drive → The Gomsons → MonthlyBackups. The last %lld are kept.|Sikkerhetskopier vises i Filer → iCloud Drive → The Gomsons → MonthlyBackups. De siste %lld beholdes.
+export.monthly_backing_up|Backing up to iCloud…|Sikkerhetskopierer til iCloud…
+export.monthly_backup_now|Back up to iCloud now|Sikkerhetskopier til iCloud nå
+export.monthly_list_section|iCloud monthly backups|Månedlige iCloud-sikkerhetskopier
+export.monthly_none|No monthly iCloud backups yet.|Ingen månedlige iCloud-sikkerhetskopier ennå.
+export.monthly_never|Never|Aldri
 data_backup.title|Data backup|Datasikkerhetskopi
 data_backup.export_failed|Could not export|Kunne ikke eksportere
 data_backup.monthly_title|Monthly iCloud backups|Månedlige iCloud-sikkerhetskopier
@@ -116,7 +142,7 @@ property.unnamed|Unnamed property|Eiendom uten navn
 property.archived|Archived (%lld)|Arkivert (%lld)
 property.archive|Archive|Arkiver
 property.restore|Restore|Gjenopprett
-property.key_info|Key information|Nøkkelinfo
+property.key_info|Key information|Viktig informasjon
 property.wifi|Wi‑Fi|Wi‑Fi
 property.emergency_notes|On-site emergency notes|Nødnotater på stedet
 property.type_picker|Type|Type
@@ -146,6 +172,7 @@ calendar.notify_day|Notify on the day|Varsle samme dag
 calendar.notify_before|Notify %lld min before|Varsle %lld min før
 calendar.notify_at_time|Notify at event time|Varsle ved tidspunkt
 calendar.event_footer_birthday|Pick month and day for the yearly celebration, the birth year for age, and a reminder below.|Velg måned og dag for den årlige feiringen, fødselsår for alder, og påminnelse under.
+calendar.remove_tree_birthday|Hide birthday from calendar|Skjul bursdag fra kalender
 calendar.events_footer|Allow notifications…|Tillat varsler i Innstillinger hvis du ikke ser dem.
 calendar.new_event|New event|Ny hendelse
 calendar.edit_event|Edit event|Rediger hendelse
@@ -175,23 +202,54 @@ family_tree.branch_my_line|My line|Min linje
 family_tree.branch_spouse|Spouse line|Ektefelles linje
 family_tree.branch_extended|Extended|Utvidet
 family_tree.partner|Partner: %@|Partner: %@
-family_tree.birthday_toggle|Birthday on file|Fødselsdag registrert
+family_tree.birthday_toggle|Has birthday|Har fødselsdato
+family_tree.birthday_on_calendar|Show on calendar|Vis i kalender
 family_tree.relationships|Relationships|Relasjoner
 family_tree.mother|Mother|Mor
 family_tree.father|Father|Far
 family_tree.partner_picker|Partner|Partner
-family_tree.tree_layout|Tree layout|Treoppsett
-family_tree.tier_stepper|Tier (lower = higher on tree): %lld|Nivå (lavere = høyere i treet): %lld
+family_tree.tree_layout|Tree position|Plassering i treet
+family_tree.tier_stepper|Generation (lower = higher on tree): %lld|Generasjon (lavere = høyere i treet): %lld
 family_tree.new_person|New person|Ny person
 family_tree.edit_person|Edit person|Rediger person
 family_tree.delete_person|Delete person|Slett person
+family_tree.delete_person_footer|Removes this person from the tree. Linked relationships are cleared.|Fjerner personen fra treet. Koblinger til andre tømmes.
+family_tree.delete_person_confirm_title|Delete %@?|Slette %@?
+family_tree.delete_person_confirm_msg|This cannot be undone.|Dette kan ikke angres.
+family_tree.delete_person_confirm_action|Delete person|Slett person
 family_tree.upcoming_birthdays|Upcoming birthdays|Kommende bursdager
 family_tree.birthday_today|Today|I dag
 family_tree.birthday_tomorrow|Tomorrow|I morgen
 family_tree.birthday_in_days_fmt|in %lld days|om %lld dager
 family_tree.birthday_next_fmt|in %lld days · %@|om %lld dager · %@
 family_tree.profile_title|Profile|Profil
-family_tree.profile_birthday|Birthday|Bursdag
+family_tree.profile_section|Name & dates|Navn og datoer
+family_tree.profile_birthday|Life dates|Livsdatoer
+family_tree.photo_section|Photo|Bilde
+family_tree.photo_footer|Tap to add or change a portrait.|Trykk for å legge til eller endre portrett.
+family_tree.remove_photo|Remove photo|Fjern bilde
+family_tree.full_name|Full name|Fullt navn
+family_tree.preferred_name|Preferred name|Kallenavn
+family_tree.preferred_name_footer|Shown on the tree when set.|Vises i treet når det er satt.
+family_tree.contact_section|Contact|Kontakt
+family_tree.contact_email|Email|E-post
+family_tree.contact_mobile|Mobile|Mobil
+family_tree.city|City|By
+family_tree.city_map_footer|Used on the family map.|Brukes på familie-kartet.
+family_tree.relation_label|How you’re related|Hvordan dere er i slekt
+family_tree.relation_label_footer|Optional label when branch alone isn’t enough (aunt, cousin, …).|Valgfri etikett når gren alene ikke holder (tante, kusine, …).
+family_tree.view_map|Map|Kart
+family_tree.view_photos|Photos|Bilder
+family_tree.map_empty_title|No cities on the map yet|Ingen byer på kartet ennå
+family_tree.map_empty_detail|Add a city on someone’s profile to place them here.|Legg til by på en profil for å vise dem her.
+family_tree.photos_empty_title|No family photos yet|Ingen familiebilder ennå
+family_tree.photos_empty_detail|Add group photos for the family album.|Legg til gruppebilder i familiealbumet.
+family_tree.add_group_photo|Add group photo|Legg til gruppebilde
+family_tree.group_photo_caption|Caption|Bildetekst
+family_tree.group_photo_caption_placeholder|Optional caption…|Valgfri bildetekst…
+family_tree.group_photo_edit|Edit photo|Rediger bilde
+family_tree.delete_group_photo|Delete photo|Slett bilde
+family_tree.delete_group_photo_confirm|Delete this group photo?|Slette dette gruppebildet?
 family_tree.next_birthday|Next|Neste
 family_tree.turning_age|Turning|Fyller
 family_tree.profile_partner|Partner|Partner
@@ -203,8 +261,8 @@ family_tree.partner_status.dating|Dating|Kjærester
 family_tree.partner_status.engaged|Engaged|Forlovet
 family_tree.partner_status.married|Married|Gift
 family_tree.partner_status.partner|Partner|Partner
-family_tree.deceased_badge|Deceased|Død
-family_tree.deceased_toggle|Deceased|Død
+family_tree.deceased_badge|Deceased|Avdød
+family_tree.deceased_toggle|Mark as deceased|Merk som avdød
 family_tree.death_date|Date of death|Dødsdato
 family_tree.death_date_toggle|Death date known|Dødsdato kjent
 family_tree.died_on_fmt|Died %@|Døde %@
@@ -215,7 +273,7 @@ family_tree.siblings_footer|People who share a mother or father are siblings aut
 family_tree.siblings_empty|Add more people to link siblings.|Legg til flere personer for å koble søsken.
 family_tree.sibling_via_parents|via parents|via foreldre
 family_tree.import_warn_sibling_fmt|Sibling “%@” not found for %@.|Søsken «%@» ble ikke funnet for %@.
-subs.title|Subs|Abbo
+subs.title|Subscriptions|Abonnementer
 subs.empty|No subscriptions yet|Ingen abonnement ennå
 subs.empty.detail|Track streaming…|Følg streaming, klubber, forsikring og mer — med nettsted, innlogging, fornyelse og kostnad.
 subs.period|Period|Periode
@@ -253,13 +311,80 @@ subs.expiry_notify|You'll be notified 2 days before expiry.|Du får varsel 2 dag
 subs.new_sub|New sub|Nytt abonnement
 subs.edit_sub|Edit sub|Rediger abonnement
 subs.notes_hint|Phone numbers, policy numbers…|Telefonnumre, policynumre, hint …
-holidays.hub.title|Holiday Hub|Feriehub
+holidays.hub.title|Holidays|Ferier
 holidays.hub.section_picker|Section|Seksjon
-holidays.hub.upcoming|Upcoming|Kommende
+holidays.hub.celebrations|Celebrations|Feiringer
+holidays.hub.trips|Trips|Turer
+holidays.hub.upcoming|Trips|Turer
 holidays.hub.ideas|Ideas|Ideer
 holidays.hub.past|Past|Tidligere
 holidays.hub.map|Map|Kart
+holidays.time.upcoming|Upcoming|Kommende
+holidays.time.past|Past|Tidligere
 holidays.new_upcoming|New upcoming trip|Ny kommende tur
+holidays.new_celebration|New celebration|Ny feiring
+celebration.time_filter|Show|Vis
+celebration.empty.upcoming|No upcoming celebrations|Ingen kommende feiringer
+celebration.empty.past|No past celebrations|Ingen tidligere feiringer
+celebration.empty.desc.upcoming|Plan a party — RSVPs, menu, venue, and who you're celebrating.|Planlegg en fest — RSVP, meny, sted og hvem du feirer.
+celebration.empty.desc.past|Log celebrations you've hosted.|Logg feiringer du har hatt.
+celebration.untitled|Untitled celebration|Feiring uten navn
+celebration.subject.placeholder|Who or what we're celebrating|Hvem eller hva vi feirer
+celebration.subject.label|Celebrating|Vi feirer
+celebration.subject.hint|Birthday, anniversary, graduation, holiday…|Bursdag, jubileum, eksamen, høytid…
+celebration.when|When|Når
+celebration.when.hint|Party date or multi-day event|Festdato eller flerdagers arrangement
+celebration.venue|Venue|Sted
+celebration.venue.hint|Home, restaurant, cabin, church…|Hjemme, restaurant, hytte, kirke…
+celebration.venue.placeholder|Where the party happens|Hvor festen er
+celebration.menu|Menu|Meny
+celebration.menu.hint|Food, drinks, cake, catering notes|Mat, drikke, kake, catering
+celebration.notes|Party notes|Festnotater
+celebration.notes.hint|Decor, timeline, gifts, music, tasks|Dekor, tidsplan, gaver, musikk, oppgaver
+celebration.rsvp.summary|%lld of %lld attending|%lld av %lld kommer
+celebration.rsvp.family|Family|Familie
+celebration.rsvp.guests|Guests|Gjester
+celebration.rsvp.attending|attending|kommer
+celebration.family_attendees|Family attendees|Familie på listen
+celebration.family_attendees.hint|Tap to edit — toggle RSVP on the detail screen|Trykk for å redigere — bytt RSVP på detaljsiden
+celebration.family_empty|Add family on the guest list|Legg til familie på gjestelisten
+celebration.edit|Edit celebration|Rediger feiring
+celebration.new|Plan celebration|Planlegg feiring
+celebration.log_past|Log past celebration|Logg tidligere feiring
+celebration.delete_confirm|Delete this celebration?|Slette denne feiringen?
+celebration.editor.event_section|Celebration|Feiring
+celebration.event_name|Event name|Navn på festen
+celebration.event_name.prompt|e.g. CC's birthday bash|f.eks. CCs bursdagsfest
+celebration.single_day|Single-day event|Én dag
+celebration.date|Event date|Dato
+celebration.cover.footer|Optional photo for the party (invitation, venue, honoree)|Valgfritt bilde (invitasjon, sted, den vi feirer)
+celebration.editor.footer|After saving, open the celebration to add family RSVPs and guest list.|Etter lagring, åpne feiringen for familie-RSVP og gjesteliste.
+celebration.hint.add_venue|Add venue|Legg til sted
+celebration.hint.invite_guests|Invite family & guests|Inviter familie og gjester
+celebration.hint.plan_menu|Plan the menu|Planlegg menyen
+celebration.rsvp.empty.title|Guest list starts here|Gjestelisten starter her
+celebration.rsvp.empty.hint|Add family and friends below to track who's coming, maybe, or not.|Legg til familie og venner under for å følge hvem kommer, kanskje, eller ikke.
+celebration.family_empty.title|No family on the list yet|Ingen familie på listen ennå
+celebration.family_empty.hint|Tap + to add Pappa, Mamma, CC, Herman — then set each RSVP.|Trykk + for å legge til Pappa, Mamma, CC, Herman — og sett RSVP.
+celebration.guests_empty.title|No other guests yet|Ingen andre gjester ennå
+celebration.guests_empty.hint|Add friends, neighbors, or coworkers and mark their RSVP.|Legg til venner, naboer eller kollegaer og sett RSVP.
+celebration.date.today|Today|I dag
+celebration.add_family|Add family|Legg til familie
+party.invite.family_tree|Family tree|Familietre
+party.invite.family_tree.hint|Pick anyone from your tree — cousins, aunts, grandparents, etc.|Velg fra treet — søskenbarn, tanter, besteforeldre, osv.
+party.invite.family_tree.empty|No people in the family tree yet. Add them under Family tree first.|Ingen i familietreet ennå. Legg dem til under Familietre først.
+party.invite.family_tree.no_match|No matches for that search.|Ingen treff på søket.
+party.invite.contacts|Contacts|Kontakter
+party.invite.pick_contacts|Choose from Contacts…|Velg fra Kontakter…
+party.invite.contacts.footer|You can select several contacts at once in the picker.|Du kan velge flere kontakter i velgeren.
+party.invite.ready_to_add|Ready to add|Klar til å legge til
+party.invite.already_on_list|Already on this list|Allerede på listen
+party.invite.guests_nav|Add guests|Legg til gjester
+party.invite.from_sources|From family tree or contacts|Fra familietre eller kontakter
+party.invite.type_name|Type a name|Skriv et navn
+party.invite.search_tree|Search family tree|Søk i familietre
+celebration.guest_list|Guest list & RSVPs|Gjesteliste og RSVP
+celebration.guest_list.hint|Friends, neighbors, coworkers — tap to set if they're coming|Venner, naboer, kollegaer — trykk for å sette om de kommer
 holidays.log_past|Log past trip|Logg tidligere tur
 trips.empty.upcoming|No upcoming trips|Ingen kommende turer
 trips.empty.past|No past trips yet|Ingen tidligere turer ennå
@@ -323,7 +448,35 @@ trip.travelers.hint|Tap someone to edit, hold to remove. Use + to add.|Trykk noe
 trip.add_travelers|Add travelers|Legg til reisefølge
 trip.no_travelers|No one added yet|Ingen lagt til ennå
 trip.edit_name|Edit name & role|Rediger navn og rolle
+trip.edit_stop|Edit stop|Rediger stopp
+trip.edit_stop_nav|Edit stop|Rediger stopp
+trip.kind.trip|Trip|Tur
+trip.kind.celebration|Celebration|Feiring
+trip.kind.section|Trip or celebration|Tur eller feiring
+trip.kind.label|Kind|Type
+trip.linked_property.section|Vacation home|Hytte
+trip.linked_property.label|Link to cabin|Koble til hytte
+trip.linked_property.none|None|Ingen
+trip.other_guests|Other guests|Andre gjester
+trip.other_guests.hint|Tap a guest to edit RSVP. Use + for people outside the family.|Trykk en gjest for å redigere svar. Bruk + for personer utenfor familien.
+trip.guests_attending_count|%1$d of %2$d coming|%1$d av %2$d kommer
+trip.add_guest.a11y|Add guest|Legg til gjest
+trip.no_other_guests|No other guests yet|Ingen andre gjester ennå
+trip.edit_guest|Edit guest|Rediger gjest
+trip.remove_guest|Remove guest|Fjern gjest
+trip.guest_unnamed|Guest|Gjest
+trip.guest_coming|Coming|Kommer
+trip.guest_not_coming|Not coming|Kommer ikke
+trip.guest_maybe|Maybe|Muligens
+trip.guest.section|Guest details|Gjestdetaljer
+trip.guest.rsvp|RSVP|Svar
+trip.edit_guest_nav|Edit guest|Rediger gjest
+trip.add_guest_nav|Add guest|Legg til gjest
+trip.remove_guest_confirm|Remove %@ from the guest list?|Fjerne %@ fra gjestelisten?
+trip.this_guest|this guest|denne gjesten
 trip.remove_from_trip|Remove from trip|Fjern fra tur
+trip.remove_stop|Remove stop|Fjern stopp
+trip.remove_stop_confirm|Remove %@ from this trip?|Fjerne %@ fra denne turen?
 trip.stops|Stops|Stopp
 trip.stops.map_hint|Stops build your route map on this trip; the holiday world map uses the cover city from Edit trip.|Stopp bygger rute på turen; ferieverdenskartet bruker omslagsby fra Rediger tur.
 trip.travelers.a11y|Add travelers|Legg til reisefølge
@@ -361,18 +514,19 @@ trip.travellers|Travellers|Reisende
 trip.travellers.none.hint|No one added yet. Use Add travellers below, or add from the trip screen.|Ingen lagt til ennå. Bruk Legg til reisende under, eller fra turskjermen.
 trip.add_travellers|Add travellers|Legg til reisende
 trip.travellers.footer.future|This becomes your planned trip—add stops and travellers from the trip screen.|Dette blir den planlagte turen — legg til stopp og reisende fra turskjermen.
-trip.travellers.footer.past|Use this to log a trip that already happened. Trips whose end date is before today appear under Past.|Bruk dette for å logge en tur som allerede skjedde. Turer som slutter før i dag vises under Tidligere.
+trip.travellers.footer.past|Use this to log a trip that already happened. Trips whose end date is before today appear under Trips → Past.|Bruk dette for å logge en tur som allerede skjedde. Turer som slutter før i dag vises under Turer → Tidligere.
 trip.edit_trip|Edit trip|Rediger tur
 trip.new_trip|New trip|Ny tur
 trip.log_past|Log past trip|Logg tidligere tur
 trip.couldnt_save|Couldn’t save trip|Kunne ikke lagre tur
 trip.traveller.edit|Edit traveller|Rediger reisende
-trip.traveller.section|Traveller|Reisende
+trip.traveller.section|Traveller details|Reisendedetaljer
 trip.role.optional|Role (optional)|Rolle (valgfritt)
 trip.role.prompt|e.g. Teen, Guest|f.eks. tenåring, gjest
 trip.couldnt_save_short|Couldn’t save|Kunne ikke lagre
 trip.remove_participant|Remove %@ from this trip?|Fjerne %@ fra denne turen?
 trip.this_person|this person|denne personen
+trip.this_stop|this stop|dette stoppet
 trip.add_travelers.title|Add travelers|Legg til reisende
 trip.family.hint.past|Turn on everyone who went—then tap Add once.|Slå på alle som var med — trykk «Legg til» én gang.
 trip.family.hint.future|Turn on everyone who’s going—then tap Add once.|Slå på alle som skal med — trykk «Legg til» én gang.
@@ -409,7 +563,7 @@ planning.proposals|Proposals|Forslag
 planning.vote_hint|Vote thumbs-up as yourself. When all four have voted, we’ll say “Let’s do it!”|Stem tommel opp som deg selv. Når alle fire har stemt, sier vi «Vi gjør det!»
 planning.propose|Propose|Foreslå
 planning.voting_as|Voting as|Stemmer som
-planning.idea_footer|Suggest a place and rough dates—everyone votes here. Add the real trip under Upcoming when you’re ready.|Foreslå sted og omtrentlige datoer — alle stemmer her. Legg til ekte tur under Kommende når dere er klare.
+planning.idea_footer|Suggest a place and rough dates—everyone votes here. Add the real trip under Trips when you’re ready.|Foreslå sted og omtrentlige datoer — alle stemmer her. Legg til ekte tur under Turer når dere er klare.
 planning.empty_title|No proposals yet|Ingen forslag ennå
 planning.destination|Destination|Destinasjon
 planning.destination_placeholder|Destination|Destinasjon
@@ -440,13 +594,13 @@ cover.search|Search by city, then pick a result|Søk etter by, velg resultat
 cover.choose_photo|Choose photo from library|Velg bilde fra bibliotek
 cover.remove_heading|Remove heading photo|Fjern toppbilde
 cover.alert|Cover image|Omslagsbilde
-trip.section|Trip|Tur
+trip.section|Trip details|Turdetaljer
 trip.family|Family|Familie
 trip.actions.a11y|Trip actions|Turhandlinger
 trip.add_stop.a11y|Add stop|Legg til stopp
 trip.reference.field|Reference # (booking / PNR)|Referanse # (booking / PNR)
 trip.guest_name|Guest|Gjest
-cover.heading_title|Heading photo|Toppbilde
+cover.heading_title|Cover photo|Forsidebilde
 cover.finding_photos|Finding photos…|Finner bilder…
 cover.loading_previews|Loading previews…|Laster forhåndsvisninger…
 cover.satellite_overview|City overview (satellite)|Byoversikt (satellitt)
@@ -590,10 +744,13 @@ property.emergency.quick|Quick add|Hurtiglegg til
 property.contractor.new|New contractor|Ny håndverker
 property.contractor.trade|Trade|Fag
 property.provider.new|New service provider|Ny leverandør
-property.provider.type|Type|Type
+property.provider.type|Service type|Tjenestetype
 property.acct|Acct: %@|Konto: %@
 landing.data_backup|Data backup|Datasikkerhetskopi
 landing.family_photo|Family photo|Familiebilde
+landing.family_portraits|Family portrait row|Familieportretter
+landing.herman_and_bluee|Herman & Bluee|Herman og Bluee
+landing.herman_holding_bluee|Herman holding Bluee|Herman holder Bluee
 landing.add_asset|Add FamilyPhoto to Assets|Legg til FamilyPhoto i Assets
 landing.new_badge|NEW|NY
 landing.new_updated|New or updated|Nytt eller oppdatert
@@ -653,6 +810,9 @@ inventory.cat.phoneTablet|Phones & tablets|Telefoner og nettbrett
 inventory.section.valuables|Watches & instruments|Klokker og instrumenter
 property.kind.house|House|Hus
 property.kind.cabin|Cabin|Hytte
+property.cabin.next_visits|Next cabin visits|Neste hytteturer
+property.cabin.with_others|With %@|Med %@
+property.cabin.next_visits.footer|Link an upcoming trip to this cabin in Holidays (edit trip → vacation home) and add family travelers to see dates here.|Koble en kommende tur til hytta under Ferier (rediger tur → hytte) og legg til familien for å se datoer her.
 property.kind.apartment|Apartment|Leilighet
 property.kind.land|Land|Tomt
 property.kind.other|Other|Annet
@@ -805,7 +965,7 @@ property.company_name|Company|Selskap
 property.contact|Contact|Kontakt
 property.contact.new|New contact|Ny kontakt
 property.contact.notes_prompt|Notes about this contact|Notater om kontakten
-property.contact.person|Person|Person
+property.contact.person|Contact|Kontakt
 property.contact.primary_toggle|Primary contact|Primærkontakt
 property.contact.reach|Phone / email|Telefon / e-post
 property.contact.unnamed|Unnamed contact|Kontakt uten navn
@@ -818,7 +978,7 @@ property.contractors.hint_rented|Repair contacts for this rental.|Reparasjonskon
 property.details|Details|Detaljer
 property.emergency|Emergency|Nød
 property.emergency.empty|No emergency numbers yet.|Ingen nødnumre ennå.
-property.emergency.number_section|Number|Nummer
+property.emergency.number_section|Phone number|Telefonnummer
 property.emergency.preset.building|Building / caretaker|Bygg / vaktmester
 property.emergency.preset.fire|Fire|Brann
 property.emergency.preset.gas|Gas utility|Gassleverandør
@@ -864,7 +1024,7 @@ property.ssid|Network name|Nettverksnavn
 property.tenure|Ownership|Eierskap
 property.tenure.owned|Owned|Eid
 property.tenure.rented|Rented|Leid
-property.trade|Trade|Fag
+property.trade|Trade / specialty|Fag / spesialitet
 property.trash_prompt|Pickup days, bins, recycling center…|Hentedager, spann, gjenvinningsstasjon …
 property.utilities_prompt|Account numbers, meter IDs, login notes…|Kontonumre, måler-ID, innlogging …
 property.water_shutoff_prompt|Where the main shutoff is|Hvor hovedkranen er
@@ -888,3 +1048,76 @@ family_tree.import_warn_empty_name_fmt|Row %lld: skipped (empty name).|Rad %lld:
 family_tree.import_warn_partner_busy_fmt|“%@” already has a partner link.|«%@» har allerede en partnerkobling.
 family_tree.import_warn_partner_fmt|Partner “%@” not found for %@.|Partner «%@» ble ikke funnet for %@.
 family_tree.import_warnings_header|Warnings|Advarsler
+
+kinship.you|You|Deg
+kinship.partner|Partner|Partner
+kinship.mother|Mother|Mor
+kinship.father|Father|Far
+kinship.parent|Parent|Forelder
+kinship.daughter|Daughter|Datter
+kinship.son|Son|Sønn
+kinship.child|Child|Barn
+kinship.sister|Sister|Søster
+kinship.brother|Brother|Bror
+kinship.sibling|Sibling|Søsken
+kinship.grandmother|Grandmother|Bestemor
+kinship.grandfather|Grandfather|Bestefar
+kinship.grandparent|Grandparent|Besteforelder
+kinship.great_grandmother|Great-grandmother|Oldemor
+kinship.great_grandfather|Great-grandfather|Oldefar
+kinship.great_grandparent|Great-grandparent|Oldeforelder
+kinship.granddaughter|Granddaughter|Barnebarn
+kinship.grandson|Grandson|Barnebarn
+kinship.grandchild|Grandchild|Barnebarn
+kinship.great_granddaughter|Great-granddaughter|Oldebarn
+kinship.great_grandson|Great-grandson|Oldebarn
+kinship.great_grandchild|Great-grandchild|Oldebarn
+kinship.aunt|Aunt|Tante
+kinship.uncle|Uncle|Onkel
+kinship.aunt_uncle|Aunt/Uncle|Tante/onkel
+kinship.great_aunt|Great-aunt|Grandtante
+kinship.great_uncle|Great-uncle|Grandonkel
+kinship.great_aunt_uncle|Great-aunt/uncle|Grandtante/grandonkel
+kinship.niece|Niece|Niese
+kinship.nephew|Nephew|Nevø
+kinship.niece_nephew|Niece/Nephew|Niese/nevø
+kinship.grandniece|Grandniece|Grandniese
+kinship.grandnephew|Grandnephew|Grandnevø
+kinship.grandniece_nephew|Grandniece/nephew|Grandniese/grandnevø
+kinship.cousin|Cousin|Fetter/kusine
+kinship.second_cousin|Second cousin|Tremenning
+kinship.parent_in_law|Parent-in-law|Svigerforelder
+kinship.sister_in_law|Sister-in-law|Svigerinne
+kinship.brother_in_law|Brother-in-law|Svoger
+kinship.sibling_in_law|Sibling-in-law|Svoger/svigerinne
+kinship.daughter_in_law|Daughter-in-law|Svigerdatter
+kinship.son_in_law|Son-in-law|Svigersønn
+kinship.child_in_law|Child-in-law|Svigerbarn
+kinship.parents_partner|Parent’s partner|Forelders partner
+kinship.relative|Relative|Slektning
+kinship.extended|Extended family|Øvrig familie
+family_tree.add_mother|Add mother|Legg til mor
+family_tree.add_father|Add father|Legg til far
+family_tree.partners_a11y|Partners|Partnere
+family_tree.card_tap_hint|Tap to center this person; tap again to open the profile|Trykk for å sentrere personen; trykk igjen for å åpne profilen
+family_tree.view_profile|View profile|Vis profil
+family_tree.center_in_tree|Center in tree|Sentrer i treet
+family_tree.this_is_me|This is me|Dette er meg
+family_tree.generations_a11y|Generations shown|Generasjoner som vises
+family_tree.settings_a11y|Tree settings|Treinnstillinger
+family_tree.settings_title|Tree settings|Treinnstillinger
+family_tree.settings_section|Display|Visning
+family_tree.settings_footer|Pinch to zoom the tree. Tap a person to center them; tap the centered person to open their profile.|Knip for å zoome. Trykk på en person for å sentrere; trykk på den sentrerte for å åpne profilen.
+family_tree.setting_cousins|Show cousins of home person|Vis fettere og kusiner til hovedpersonen
+family_tree.setting_add_parents|Show cards to add parents|Vis kort for å legge til foreldre
+family_tree.setting_color_code|Color-code by family branch|Fargekoding etter familiegren
+family_tree.setting_deceased_ribbon|Show black ribbon for deceased|Vis svart bånd for avdøde
+family_tree.who_am_i|Who am I?|Hvem er jeg?
+family_tree.me_is_fmt|Me: %@|Meg: %@
+family_tree.center_on_me|Center on me|Sentrer på meg
+family_tree.me_footer|Relationship labels (uncle, grandmother, cousin, …) are shown relative to the person you pick.|Slektskapsetiketter (onkel, bestemor, kusine, …) vises i forhold til personen du velger.
+family_tree.i_am|I am…|Jeg er…
+family_tree.parents|Parents|Foreldre
+family_tree.children|Children|Barn
+kinship.cousin_female|Cousin|Kusine
+kinship.cousin_male|Cousin|Fetter

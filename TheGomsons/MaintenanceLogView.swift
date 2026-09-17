@@ -215,7 +215,7 @@ private struct MaintenanceEntryRow: View {
 struct MaintenanceEntryEditorView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Property.name) private var properties: [Property]
+    @Query(sort: [SortDescriptor(\Property.sortOrder), SortDescriptor(\Property.name)]) private var properties: [Property]
 
     var entryToEdit: PropertyMaintenanceEntry? = nil
     var defaultProperty: Property? = nil

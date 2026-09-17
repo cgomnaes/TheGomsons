@@ -9,9 +9,139 @@ import UserNotifications
 
 enum FamilyCalendarNotifications {
     private static let idPrefix = "family-event-"
+    private static let personPrefix = "person-birthday-"
+    private static let todaySuffix = "-today"
+    private static let tomorrowSuffix = "-tomorrow"
+
+    /// Local notification time for annual birthdays (family tree + calendar birthday events).
+    private static let birthdayNotifyHour = 8
+    private static let birthdayNotifyMinute = 0
+
+    /// Month/day/hour/minute for a yearly repeating trigger on the celebration day at 8 AM (minus optional lead time).
+    private static func birthdayNotificationComponents(
+        month: Int,
+        day: Int,
+        minutesBefore: Int = 0
+    ) -> DateComponents {
+        let cal = Calendar.current
+        var base = DateComponents()
+        base.year = cal.component(.year, from: Date())
+        base.month = month
+        base.day = day
+        base.hour = birthdayNotifyHour
+        base.minute = birthdayNotifyMinute
+        guard let eightAM = cal.date(from: base) else {
+            var fallback = DateComponents()
+            fallback.month = month
+            fallback.day = day
+            fallback.hour = birthdayNotifyHour
+            fallback.minute = birthdayNotifyMinute
+            return fallback
+        }
+
+        let celebrationStart = cal.startOfDay(for: eightAM)
+        let fireDate: Date
+        if minutesBefore > 0,
+           let earlier = cal.date(byAdding: .minute, value: -minutesBefore, to: eightAM),
+           earlier >= celebrationStart {
+            fireDate = earlier
+        } else {
+            fireDate = eightAM
+        }
+
+        let parts = cal.dateComponents([.month, .day, .hour, .minute], from: fireDate)
+        var match = DateComponents()
+        match.month = parts.month
+        match.day = parts.day
+        match.hour = parts.hour
+        match.minute = parts.minute
+        return match
+    }
+
+    /// Month/day/hour/minute for 8 AM on the calendar day before a birthday (yearly repeat).
+    private static func dayBeforeBirthdayComponents(month: Int, day: Int) -> DateComponents? {
+        let cal = Calendar.current
+        var base = DateComponents()
+        base.year = cal.component(.year, from: Date())
+        base.month = month
+        base.day = day
+        base.hour = birthdayNotifyHour
+        base.minute = birthdayNotifyMinute
+        guard let birthday = cal.date(from: base),
+              let dayBefore = cal.date(byAdding: .day, value: -1, to: birthday)
+        else { return nil }
+
+        let parts = cal.dateComponents([.month, .day], from: dayBefore)
+        var match = DateComponents()
+        match.month = parts.month
+        match.day = parts.day
+        match.hour = birthdayNotifyHour
+        match.minute = birthdayNotifyMinute
+        return match
+    }
+
+    private static func scheduleYearlyBirthdayPair(
+        todayID: String,
+        tomorrowID: String,
+        legacyIDs: [String] = [],
+        month: Int,
+        day: Int,
+        todayTitle: String,
+        todayBody: String,
+        tomorrowTitle: String,
+        tomorrowBody: String,
+        dayOfMinutesBefore: Int = 0
+    ) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: legacyIDs + [todayID, tomorrowID])
+
+        guard let tomorrowMatch = dayBeforeBirthdayComponents(month: month, day: day) else { return }
+        let todayMatch = birthdayNotificationComponents(
+            month: month,
+            day: day,
+            minutesBefore: dayOfMinutesBefore
+        )
+
+        let tomorrowContent = UNMutableNotificationContent()
+        tomorrowContent.title = tomorrowTitle
+        tomorrowContent.body = tomorrowBody
+        tomorrowContent.sound = .default
+        center.add(
+            UNNotificationRequest(
+                identifier: tomorrowID,
+                content: tomorrowContent,
+                trigger: UNCalendarNotificationTrigger(dateMatching: tomorrowMatch, repeats: true)
+            )
+        )
+
+        let todayContent = UNMutableNotificationContent()
+        todayContent.title = todayTitle
+        todayContent.body = todayBody
+        todayContent.sound = .default
+        center.add(
+            UNNotificationRequest(
+                identifier: todayID,
+                content: todayContent,
+                trigger: UNCalendarNotificationTrigger(dateMatching: todayMatch, repeats: true)
+            )
+        )
+    }
+
+    private static func displayName(for person: FamilyPerson) -> String {
+        let name = person.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? String(localized: "calendar.birthday_notify.generic_name") : name
+    }
 
     static func notificationIdentifier(for event: FamilyEvent) -> String {
         idPrefix + String(describing: event.persistentModelID)
+    }
+
+    private static func todayNotificationIdentifier(for event: FamilyEvent) -> String {
+        notificationIdentifier(for: event) + todaySuffix
+    }
+
+    private static func tomorrowNotificationIdentifier(for event: FamilyEvent) -> String {
+        notificationIdentifier(for: event) + tomorrowSuffix
     }
 
     static func requestAuthorizationIfNeeded() async {
@@ -22,7 +152,7 @@ enum FamilyCalendarNotifications {
     }
 
     /// Schedules one local notification before (or at) the event. Removes any previous request for this event.
-    /// Birthdays use a **yearly repeating** calendar trigger; other events use a one-shot interval trigger.
+    /// Birthdays use yearly repeating **today** + **tomorrow** alerts at 8 AM; other events use a one-shot interval trigger.
     static func schedule(for event: FamilyEvent) {
         if event.kind == .birthday {
             scheduleBirthday(event)
@@ -56,39 +186,39 @@ enum FamilyCalendarNotifications {
     }
 
     private static func scheduleBirthday(_ event: FamilyEvent) {
-        let id = notificationIdentifier(for: event)
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
-
         let cal = Calendar.current
         let nextCelebration = event.nextOccurrence(after: Date())
-        let fireDate = cal.date(byAdding: .minute, value: -max(0, event.reminderMinutesBefore), to: nextCelebration) ?? nextCelebration
-        guard fireDate > Date().addingTimeInterval(-0.5) else { return }
+        let month = cal.component(.month, from: nextCelebration)
+        let day = cal.component(.day, from: nextCelebration)
 
-        let content = UNMutableNotificationContent()
-        let title = event.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        content.title = title.isEmpty ? "Birthday" : title
-        // Repeating triggers keep this text; age changes each year (refresh when you open the app).
-        var body = "Annual reminder · " + nextCelebration.formatted(date: .abbreviated, time: .omitted)
-        if !event.location.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            body += " · \(event.location)"
-        }
-        content.body = body
-        content.sound = .default
+        let rawTitle = event.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = rawTitle.isEmpty ? String(localized: "event.kind.birthday") : rawTitle
 
-        let parts = cal.dateComponents([.month, .day, .hour, .minute], from: fireDate)
-        var match = DateComponents()
-        match.month = parts.month
-        match.day = parts.day
-        match.hour = parts.hour
-        match.minute = parts.minute
-        let trigger = UNCalendarNotificationTrigger(dateMatching: match, repeats: true)
-        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request)
+        scheduleYearlyBirthdayPair(
+            todayID: todayNotificationIdentifier(for: event),
+            tomorrowID: tomorrowNotificationIdentifier(for: event),
+            legacyIDs: [notificationIdentifier(for: event)],
+            month: month,
+            day: day,
+            todayTitle: label,
+            todayBody: String(localized: "calendar.birthday_notify.today_body"),
+            tomorrowTitle: String(
+                format: String(localized: "calendar.birthday_notify.event_tomorrow_title"),
+                locale: .current,
+                label
+            ),
+            tomorrowBody: String(localized: "calendar.birthday_notify.tomorrow_body"),
+            dayOfMinutesBefore: event.reminderMinutesBefore
+        )
     }
 
     static func cancel(for event: FamilyEvent) {
-        let id = notificationIdentifier(for: event)
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+        let ids = [
+            notificationIdentifier(for: event),
+            todayNotificationIdentifier(for: event),
+            tomorrowNotificationIdentifier(for: event),
+        ]
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     /// Reschedule all future events (e.g. after CloudKit import).
@@ -98,46 +228,61 @@ enum FamilyCalendarNotifications {
         }
     }
 
-    // MARK: - FamilyPerson birthday notifications (8 AM yearly)
-
-    private static let personPrefix = "person-birthday-"
+    // MARK: - FamilyPerson birthday notifications (8 AM day before + day of)
 
     static func notificationIdentifier(for person: FamilyPerson) -> String {
         personPrefix + String(describing: person.persistentModelID)
     }
 
-    /// Schedule a yearly 8 AM notification on this person's birthday (month + day).
-    static func schedulePersonBirthday(_ person: FamilyPerson) {
-        let id = notificationIdentifier(for: person)
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+    private static func todayNotificationIdentifier(for person: FamilyPerson) -> String {
+        notificationIdentifier(for: person) + todaySuffix
+    }
 
-        guard person.includeBirthdayOnCalendar, !person.isDeceased, let birthDate = person.birthDate else { return }
+    private static func tomorrowNotificationIdentifier(for person: FamilyPerson) -> String {
+        notificationIdentifier(for: person) + tomorrowSuffix
+    }
+
+    /// Schedule yearly 8 AM alerts the day before (“tomorrow”) and on the birthday (“today”).
+    static func schedulePersonBirthday(_ person: FamilyPerson) {
+        guard person.includeBirthdayOnCalendar, !person.isDeceased, let birthDate = person.birthDate else {
+            cancelPersonBirthday(person)
+            return
+        }
 
         let cal = Calendar.current
         let month = cal.component(.month, from: birthDate)
         let day = cal.component(.day, from: birthDate)
+        let name = displayName(for: person)
 
-        let content = UNMutableNotificationContent()
-        let name = person.displayName
-        content.title = "\(name.isEmpty ? "Family member" : name)'s birthday!"
-        content.body = "Today is \(name.isEmpty ? "their" : name + "'s") birthday"
-        content.sound = .default
-
-        var match = DateComponents()
-        match.month = month
-        match.day = day
-        match.hour = 8
-        match.minute = 0
-
-        let trigger = UNCalendarNotificationTrigger(dateMatching: match, repeats: true)
-        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request)
+        scheduleYearlyBirthdayPair(
+            todayID: todayNotificationIdentifier(for: person),
+            tomorrowID: tomorrowNotificationIdentifier(for: person),
+            legacyIDs: [notificationIdentifier(for: person)],
+            month: month,
+            day: day,
+            todayTitle: String(
+                format: String(localized: "calendar.birthday_notify.today_title"),
+                locale: .current,
+                name
+            ),
+            todayBody: String(localized: "calendar.birthday_notify.today_body"),
+            tomorrowTitle: String(
+                format: String(localized: "calendar.birthday_notify.tomorrow_title"),
+                locale: .current,
+                name
+            ),
+            tomorrowBody: String(localized: "calendar.birthday_notify.tomorrow_body")
+        )
     }
 
-    /// Remove the birthday notification for a person.
+    /// Remove the birthday notifications for a person.
     static func cancelPersonBirthday(_ person: FamilyPerson) {
-        let id = notificationIdentifier(for: person)
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+        let ids = [
+            notificationIdentifier(for: person),
+            todayNotificationIdentifier(for: person),
+            tomorrowNotificationIdentifier(for: person),
+        ]
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     /// Reschedule birthday notifications for all family members who have a birth date.

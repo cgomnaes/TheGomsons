@@ -63,6 +63,13 @@ struct DataBackupSettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
+                    if let detail = cloud.lastCloudKitSyncErrorDetail,
+                       detail != cloud.lastCloudKitSyncErrorMessage {
+                        Text(detail)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
                     Button(String(localized: "sync.reload_local")) {
                         cloud.refreshFamilyDataFromStore()
                         refreshToken = UUID()
@@ -75,8 +82,8 @@ struct DataBackupSettingsView: View {
                 Section {
                     Toggle(isOn: $monthlyEnabled) {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Monthly iCloud backups")
-                            Text("Automatically saves a full copy to iCloud Drive about every 30 days.")
+                            Text(String(localized: "export.monthly_toggle"))
+                            Text(String(localized: "export.monthly_toggle_detail"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -85,7 +92,7 @@ struct DataBackupSettingsView: View {
                         AppDataBackup.monthlyICloudBackupsEnabled = newValue
                     }
 
-                    LabeledContent("Last monthly backup") {
+                    LabeledContent(String(localized: "export.monthly_last")) {
                         Text(lastMonthlyText)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -93,8 +100,12 @@ struct DataBackupSettingsView: View {
                     }
 
                     if let days = AppDataBackup.daysUntilNextMonthlyBackup, AppDataBackup.lastMonthlyBackupDate != nil {
-                        LabeledContent("Next due") {
-                            Text(days == 0 ? "Due now" : "In \(days) day\(days == 1 ? "" : "s")")
+                        LabeledContent(String(localized: "export.monthly_next")) {
+                            Text(
+                                days == 0
+                                    ? String(localized: "export.monthly_due_now")
+                                    : String(format: String(localized: "export.monthly_in_days_fmt"), locale: .current, days)
+                            )
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -106,7 +117,13 @@ struct DataBackupSettingsView: View {
                             .foregroundStyle(.red)
                     }
 
-                    Text("Backups appear in Files → iCloud Drive → The Gomsons → MonthlyBackups. The last \(AppDataBackup.monthlyRetentionCount) are kept.")
+                    Text(
+                        String(
+                            format: String(localized: "export.monthly_files_footer_fmt"),
+                            locale: .current,
+                            AppDataBackup.monthlyRetentionCount
+                        )
+                    )
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -116,15 +133,15 @@ struct DataBackupSettingsView: View {
                         if isRunningMonthly {
                             HStack {
                                 ProgressView()
-                                Text("Backing up to iCloud…")
+                                Text(String(localized: "export.monthly_backing_up"))
                             }
                         } else {
-                            Label("Back up to iCloud now", systemImage: "icloud.and.arrow.up")
+                            Label(String(localized: "export.monthly_backup_now"), systemImage: "icloud.and.arrow.up")
                         }
                     }
                     .disabled(isRunningMonthly || isExporting || !AppDataBackup.iCloudDriveAvailable)
                 } header: {
-                    Text("Automatic backups")
+                    Text(String(localized: "export.automatic_section"))
                 }
 
                 Section {
@@ -149,10 +166,10 @@ struct DataBackupSettingsView: View {
                     .disabled(isExporting || isRunningMonthly)
                 }
 
-                Section("iCloud monthly backups") {
+                Section(String(localized: "export.monthly_list_section")) {
                     let items = AppDataBackup.listICloudMonthlyExports()
                     if items.isEmpty {
-                        Text("No monthly iCloud backups yet.")
+                        Text(String(localized: "export.monthly_none"))
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(items, id: \.path) { url in
@@ -247,7 +264,7 @@ struct DataBackupSettingsView: View {
             }
             return text
         }
-        return "Never"
+        return String(localized: "export.monthly_never")
     }
 
     private func modificationDate(of url: URL) -> Date? {

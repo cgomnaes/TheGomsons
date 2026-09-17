@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 struct PropertiesImportView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Property.name) private var properties: [Property]
+    @Query(sort: [SortDescriptor(\Property.sortOrder), SortDescriptor(\Property.name)]) private var properties: [Property]
 
     @State private var showFileImporter = false
     @State private var isImporting = false

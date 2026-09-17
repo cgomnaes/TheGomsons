@@ -68,6 +68,7 @@ struct LandingPageView: View {
 
     @State private var subtitle: String = ""
     @State private var showDataBackup = false
+    @State private var headerMode: FamilyHeaderDisplayMode = .groupPhoto
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -139,12 +140,28 @@ struct LandingPageView: View {
         }
         .onAppear {
             subtitle = Self.landingQuotes.randomElement() ?? "Welcome home!"
+            headerMode = FamilyBradyBunchLayout.randomDisplayMode()
         }
     }
 
     // MARK: - Family header
 
     private var familyHeader: some View {
+        Group {
+            if headerMode == .bradyBunch, FamilyBradyBunchLayout.portraitAvailable() {
+                FamilyBradyBunchHeader()
+                    .frame(maxWidth: 400)
+                    .padding(.horizontal, 28)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            } else {
+                groupFamilyPhotoHeader
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        }
+        .animation(.spring(duration: 0.45, bounce: 0.2), value: headerMode)
+    }
+
+    private var groupFamilyPhotoHeader: some View {
         ZStack {
             if let ui = UIImage(named: "FamilyPhoto") {
                 Image(uiImage: ui)
@@ -174,8 +191,8 @@ struct LandingPageView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            HStack(spacing: -14) {
-                ForEach(Array(["Pappa", "Mamma", "CC", "Herman"].enumerated()), id: \.offset) { i, name in
+            HStack(spacing: -10) {
+                ForEach(Array(["Pappa", "Mamma", "CC", "Herman", "Bluee"].enumerated()), id: \.offset) { i, name in
                     Circle()
                         .fill(
                             LinearGradient(
@@ -194,7 +211,7 @@ struct LandingPageView: View {
                             Circle()
                                 .strokeBorder(SimpsonsTheme.charcoal.opacity(0.25), lineWidth: 2.5)
                         }
-                        .zIndex(Double(4 - i))
+                        .zIndex(Double(5 - i))
                 }
             }
             .padding(.top, 6)
